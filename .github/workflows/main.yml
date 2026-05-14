@@ -9,531 +9,64 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Create User "apple"
+      - name: Setup VNC + Tailscale + Webserver
         run: |
-          sudo dscl . -create /Users/apple
-          sudo dscl . -create /Users/apple UserShell /bin/zsh
-          sudo dscl . -create /Users/apple RealName "Apple Forensic"
-          sudo dscl . -create /Users/apple UniqueID 502
-          sudo dscl . -create /Users/apple PrimaryGroupID 20
-          sudo dscl . -create /Users/apple NFSHomeDirectory /Users/apple
-          sudo dscl . -passwd /Users/apple "apple"
-          sudo dscl . -append /Groups/admin GroupMembership apple
-          sudo createhomedir -c -u apple > /dev/null 2>&1
-
-      - name: Setup Screen, Webserver & UI
-        run: |
+          # ── Prevent sleep ──────────────────────────────────────────
           sudo pmset -a displaysleep 0 sleep 0 disksleep 0
           caffeinate -dimsu &
 
+          # ── Who owns the GUI session ───────────────────────────────
           GUI_USER=$(stat -f "%Su" /dev/console)
           GUI_UID=$(id -u "$GUI_USER")
-          echo "$GUI_UID" > /tmp/gui_uid
+          echo "$GUI_UID"  > /tmp/gui_uid
           echo "$GUI_USER" > /tmp/gui_user
-          mkdir -p /tmp/stream
+          echo "[+] GUI session: $GUI_USER ($GUI_UID)"
+
+          # ── Install Quartz (fixes ModuleNotFoundError) ─────────────
+          pip3 install pyobjc-framework-Quartz --break-system-packages --quiet
+          echo "[+] Quartz installed"
+
+          # ── Enable VNC password auth ───────────────────────────────
+          sudo defaults write /Library/Preferences/com.apple.RemoteManagement \
+            VNCLegacyEnabled -bool true
+
+          # Write VNC password to CORRECT path (com.apple. prefix required)
+          sudo python3 -c "
+          pwd = b'apple\x00\x00\x00'
+          key = [23,82,107,6,35,78,88,7]
+          enc = bytes([pwd[i]^key[i] for i in range(8)])
+          open('/Library/Preferences/com.apple.VNCSettings.txt','wb').write(enc)
+          print('[+] VNC password file written')
+          "
+
+          # Kickstart ARD — this flips the toggle ON
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -activate -configure \
+            -clientopts -setvnclegacy -vnclegacy yes \
+            -clientopts -setvncpwd -vncpwd apple \
+            -access -on \
+            -allowAccessFor -allUsers \
+            -restart -agent
+
+          # Hard restart screensharing service
+          sudo launchctl load -w \
+            /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+          sudo launchctl kickstart -k system/com.apple.screensharing
+          sleep 3
+          echo "[+] VNC ready on :5900 — password: apple"
 
           # ── Screencap loop ─────────────────────────────────────────
-          cat > /tmp/screencap_loop.sh << 'SCREENCAP'
-          #!/bin/bash
+          mkdir -p /tmp/stream
           while true; do
             screencapture -x -C /tmp/stream/screen.jpg 2>/dev/null
             sleep 2
-          done
-          SCREENCAP
-          chmod +x /tmp/screencap_loop.sh
-          bash /tmp/screencap_loop.sh > /tmp/screencap.log 2>&1 &
+          done &
 
-          # ── index.html ─────────────────────────────────────────────
-          cat > /tmp/stream/index.html << 'ENDHTML'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>macOS Remote</title>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
-          <style>
-            :root {
-              --bg:      #060608;
-              --s0:      #0c0c10;
-              --s1:      #111118;
-              --s2:      #18181f;
-              --border:  #22222e;
-              --border2: #2e2e3e;
-              --accent:  #4af;
-              --accentd: #0a1e2e;
-              --green:   #2dce6e;
-              --greend:  #0a1e14;
-              --red:     #ff4d5e;
-              --redd:    #200a0c;
-              --yellow:  #f5c842;
-              --yelld:   #201800;
-              --text:    #d8d8e8;
-              --muted:   #55556a;
-              --muted2:  #3a3a50;
-            }
-            *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body { height: 100%; overflow: hidden; }
-            body {
-              background: var(--bg);
-              color: var(--text);
-              font-family: 'IBM Plex Mono', monospace;
-              font-size: 12px;
-              display: flex;
-              flex-direction: column;
-            }
-            .topbar {
-              display: flex;
-              align-items: center;
-              gap: 10px;
-              padding: 0 14px;
-              height: 38px;
-              background: var(--s0);
-              border-bottom: 1px solid var(--border);
-              flex-shrink: 0;
-              z-index: 10;
-            }
-            .topbar-title {
-              font-size: 11px;
-              font-weight: 600;
-              letter-spacing: .12em;
-              text-transform: uppercase;
-              color: var(--accent);
-            }
-            .badge {
-              font-size: 10px;
-              padding: 2px 7px;
-              border-radius: 3px;
-              border: 1px solid;
-              letter-spacing: .06em;
-            }
-            .badge-quartz  { color: #7c6cff; border-color: #3a2e6e; background: #0e0c1e; }
-            .badge-live    { color: var(--green); border-color: #1a4a2a; background: var(--greend); animation: pulse 2s infinite; }
-            @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-            #topstatus { margin-left: auto; font-size: 11px; color: var(--muted); }
-            #topcords  { font-size: 11px; color: var(--muted); min-width: 110px; text-align: right; }
-            .body { display: flex; flex: 1; overflow: hidden; }
-            .sidebar {
-              width: 210px;
-              min-width: 210px;
-              background: var(--s0);
-              border-right: 1px solid var(--border);
-              display: flex;
-              flex-direction: column;
-              overflow-y: auto;
-              overflow-x: hidden;
-            }
-            .sidebar::-webkit-scrollbar { width: 4px; }
-            .sidebar::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-            .panel { border-bottom: 1px solid var(--border); padding: 10px; }
-            .panel-title {
-              font-size: 9px;
-              font-weight: 600;
-              letter-spacing: .14em;
-              text-transform: uppercase;
-              color: var(--muted);
-              margin-bottom: 8px;
-            }
-            .btn {
-              display: flex;
-              align-items: center;
-              gap: 6px;
-              width: 100%;
-              padding: 6px 9px;
-              background: var(--s1);
-              color: var(--text);
-              border: 1px solid var(--border);
-              border-radius: 4px;
-              cursor: pointer;
-              font-family: 'IBM Plex Mono', monospace;
-              font-size: 11px;
-              margin-bottom: 3px;
-              transition: background .12s, border-color .12s, color .12s;
-              text-align: left;
-              white-space: nowrap;
-            }
-            .btn:hover { background: var(--s2); border-color: var(--border2); }
-            .btn.g  { border-color: #1a3520; }
-            .btn.g:hover { background: var(--greend); border-color: var(--green); color: var(--green); }
-            .btn.r  { border-color: #2a1012; }
-            .btn.r:hover { background: var(--redd); border-color: var(--red); color: var(--red); }
-            .btn.y:hover { background: var(--yelld); border-color: var(--yellow); color: var(--yellow); }
-            .btn.on { background: var(--accentd); border-color: var(--accent); color: var(--accent); }
-            .btn.on-g { background: var(--greend); border-color: var(--green); color: var(--green); }
-            .btn.on-y { background: var(--yelld); border-color: var(--yellow); color: var(--yellow); }
-            .btn-icon { font-size: 13px; flex-shrink: 0; }
-            .keygrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px; margin-bottom: 3px; }
-            .keygrid .btn { margin: 0; justify-content: center; padding: 5px 4px; font-size: 10px; }
-            .keyrow { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 3px; }
-            .keyrow .btn { margin: 0; justify-content: center; padding: 5px 4px; font-size: 10px; }
-            .arrowgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 3px; }
-            .arrowgrid .btn { margin: 0; justify-content: center; padding: 5px; font-size: 13px; }
-            .inp {
-              width: 100%;
-              background: var(--bg);
-              border: 1px solid var(--border2);
-              color: var(--text);
-              padding: 6px 8px;
-              border-radius: 4px;
-              font-family: 'IBM Plex Mono', monospace;
-              font-size: 11px;
-              margin-bottom: 4px;
-              outline: none;
-              transition: border-color .15s;
-            }
-            .inp:focus { border-color: var(--accent); }
-            .screen-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; }
-            .screen-scroll {
-              flex: 1;
-              overflow: auto;
-              position: relative;
-              display: flex;
-              align-items: flex-start;
-              justify-content: flex-start;
-            }
-            #screen {
-              display: block;
-              max-width: 100%;
-              cursor: crosshair;
-              user-select: none;
-              -webkit-user-drag: none;
-              image-rendering: -webkit-optimize-contrast;
-            }
-            #cursor-dot {
-              position: absolute;
-              width: 16px; height: 16px;
-              border-radius: 50%;
-              background: rgba(255,60,60,.9);
-              border: 2px solid #fff;
-              box-shadow: 0 0 10px rgba(0,0,0,.7), 0 0 4px rgba(255,60,60,.5);
-              pointer-events: none;
-              transform: translate(-50%,-50%);
-              display: none;
-              z-index: 9;
-              transition: left .08s, top .08s;
-            }
-            .toolbar {
-              display: flex;
-              align-items: center;
-              gap: 5px;
-              padding: 5px 10px;
-              background: var(--s0);
-              border-top: 1px solid var(--border);
-              flex-shrink: 0;
-              flex-wrap: wrap;
-            }
-            .toolbar .btn { width: auto; margin: 0; padding: 4px 10px; font-size: 10px; }
-            .sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
-            .toolbar-right { margin-left: auto; font-size: 10px; color: var(--muted); }
-            .logbar {
-              height: 56px;
-              overflow-y: auto;
-              background: var(--bg);
-              border-top: 1px solid var(--border);
-              padding: 3px 10px;
-              flex-shrink: 0;
-            }
-            .logbar::-webkit-scrollbar { width: 3px; }
-            .logbar::-webkit-scrollbar-thumb { background: var(--border); }
-            .logline { padding: 1px 0; font-size: 10px; }
-            .logline.ok   { color: var(--green); }
-            .logline.err  { color: var(--red); }
-            .logline.info { color: var(--accent); }
-            .logline.warn { color: var(--yellow); }
-            .divlabel {
-              font-size: 9px;
-              letter-spacing: .1em;
-              text-transform: uppercase;
-              color: var(--muted2);
-              text-align: center;
-              padding: 4px 0 2px;
-            }
-          </style>
-          </head>
-          <body>
-
-          <div class="topbar">
-            <span class="topbar-title">⌘ macOS Remote</span>
-            <span class="badge badge-quartz">Quartz</span>
-            <span class="badge badge-live" id="livebadge">● LIVE</span>
-            <span id="topstatus">Ready</span>
-            <span id="topcords">x:0 y:0</span>
-          </div>
-
-          <div class="body">
-            <div class="sidebar">
-
-              <div class="panel">
-                <div class="panel-title">Dialog Buttons</div>
-                <button class="btn g" onclick="dlg('Allow')"><span class="btn-icon">✓</span>Allow</button>
-                <button class="btn g" onclick="dlg('OK')"><span class="btn-icon">✓</span>OK</button>
-                <button class="btn r" onclick="dlg('Don\'t Allow')"><span class="btn-icon">✕</span>Don't Allow</button>
-                <button class="btn"   onclick="dlg('Open System Settings')"><span class="btn-icon">⚙</span>System Settings</button>
-                <button class="btn r" onclick="dlg('Cancel')"><span class="btn-icon">✕</span>Cancel</button>
-              </div>
-
-              <div class="panel">
-                <div class="panel-title">Keyboard — Navigation</div>
-                <div class="keygrid">
-                  <button class="btn" onclick="key('tab')">⇥ Tab</button>
-                  <button class="btn" onclick="key('space')">Spc</button>
-                  <button class="btn" onclick="key('enter')">↩ Ret</button>
-                </div>
-                <div class="keyrow">
-                  <button class="btn" onclick="key('escape')">⎋ Esc</button>
-                  <button class="btn" onclick="key('delete')">⌫ Del</button>
-                </div>
-                <div class="divlabel">arrows</div>
-                <div class="arrowgrid">
-                  <div></div>
-                  <button class="btn" onclick="key('up')">▲</button>
-                  <div></div>
-                  <button class="btn" onclick="key('left')">◀</button>
-                  <button class="btn" onclick="key('down')">▼</button>
-                  <button class="btn" onclick="key('right')">▶</button>
-                </div>
-              </div>
-
-              <div class="panel">
-                <div class="panel-title">Keyboard — System</div>
-                <div class="keygrid">
-                  <button class="btn" onclick="key('cmd+a')">⌘A</button>
-                  <button class="btn" onclick="key('cmd+c')">⌘C</button>
-                  <button class="btn" onclick="key('cmd+v')">⌘V</button>
-                  <button class="btn" onclick="key('cmd+z')">⌘Z</button>
-                  <button class="btn" onclick="key('cmd+tab')">⌘⇥</button>
-                  <button class="btn" onclick="key('cmd+space')">⌘Spc</button>
-                  <button class="btn" onclick="key('cmd+q')">⌘Q</button>
-                  <button class="btn" onclick="key('cmd+w')">⌘W</button>
-                  <button class="btn" onclick="key('cmd+r')">⌘R</button>
-                </div>
-              </div>
-
-              <div class="panel">
-                <div class="panel-title">Type Text</div>
-                <input class="inp" id="typetext" placeholder="type something..." onkeydown="if(event.key==='Enter')doType()">
-                <button class="btn" onclick="doType()"><span class="btn-icon">⌨</span>Send Text</button>
-              </div>
-
-              <div class="panel">
-                <div class="panel-title">Open App</div>
-                <button class="btn" onclick="openApp('Safari')"><span class="btn-icon">🌐</span>Safari</button>
-                <button class="btn" onclick="openApp('Finder')"><span class="btn-icon">📁</span>Finder</button>
-                <button class="btn" onclick="openApp('Terminal')"><span class="btn-icon">⚡</span>Terminal</button>
-                <button class="btn" onclick="openApp('System Settings')"><span class="btn-icon">⚙</span>System Settings</button>
-              </div>
-
-              <div class="panel">
-                <div class="panel-title">VNC Screen Sharing</div>
-                <button class="btn g" id="vnc-btn" onclick="startVnc()"><span class="btn-icon">🖥</span>Start VNC Server</button>
-                <div id="vnc-info" style="display:none;margin-top:6px;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;font-size:10px;line-height:1.7;">
-                  <span style="color:var(--green)">● VNC running on :5900</span><br>
-                  <span style="color:var(--muted)">Password: </span><span style="color:var(--yellow)">apple</span><br>
-                  <span style="color:var(--muted)">Connect: </span><span id="vnc-addr" style="color:var(--accent)">—</span>
-                </div>
-              </div>
-
-              <div class="panel">
-                <div class="panel-title">Shell</div>
-                <input class="inp" id="shellcmd" placeholder="shell command..." onkeydown="if(event.key==='Enter')runShell()">
-                <button class="btn" onclick="runShell()"><span class="btn-icon">▶</span>Run</button>
-                <div id="shellout" style="margin-top:4px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;font-size:10px;color:var(--green);min-height:28px;word-break:break-all;display:none;max-height:80px;overflow-y:auto;"></div>
-              </div>
-
-            </div>
-
-            <div class="screen-col">
-              <div class="screen-scroll" id="screenbox">
-                <img id="screen" src="screen.jpg" alt="screen" draggable="false">
-                <div id="cursor-dot"></div>
-              </div>
-
-              <div class="toolbar">
-                <button class="btn" id="auto-btn" onclick="toggleAuto()"><span class="btn-icon">⟳</span>Auto: OFF</button>
-                <button class="btn" id="click-btn" onclick="toggleClick()"><span class="btn-icon">🖱</span>Click: OFF</button>
-                <div class="sep"></div>
-                <button class="btn" onclick="dblClick()">Dbl Click</button>
-                <button class="btn" onclick="rgtClick()">Right Click</button>
-                <div class="sep"></div>
-                <button class="btn" onclick="snap()">📸 Snap</button>
-                <div class="toolbar-right">last: <span id="lastpos">—</span></div>
-              </div>
-
-              <div class="logbar" id="logbar"></div>
-            </div>
-
-          </div>
-
-          <script>
-          const SW=2560, SH=1664;
-          let autoIv=null, clickMode=false, lx=0, ly=0, lpx=0, lpy=0;
-          const img=document.getElementById('screen');
-          const dot=document.getElementById('cursor-dot');
-
-          function log(msg,cls='info'){
-            const b=document.getElementById('logbar');
-            const d=document.createElement('div');
-            d.className='logline '+cls;
-            const t=new Date().toLocaleTimeString('en',{hour12:false});
-            d.textContent=`${t}  ${msg}`;
-            b.prepend(d);
-            while(b.children.length>60) b.removeChild(b.lastChild);
-          }
-          function setStatus(msg,ok){
-            document.getElementById('topstatus').textContent=msg;
-            document.getElementById('topstatus').style.color=ok===false?'var(--red)':'var(--muted)';
-          }
-
-          function coords(e){
-            const r=img.getBoundingClientRect();
-            const px=Math.max(0,Math.min(e.clientX-r.left,r.width));
-            const py=Math.max(0,Math.min(e.clientY-r.top,r.height));
-            return{x:Math.round(px*(SW/r.width)),y:Math.round(py*(SH/r.height)),px,py};
-          }
-
-          img.addEventListener('mousemove',e=>{
-            const c=coords(e);
-            document.getElementById('topcords').textContent=`x:${c.x} y:${c.y}`;
-          });
-
-          img.addEventListener('click',e=>{
-            const c=coords(e);
-            lx=c.x; ly=c.y; lpx=c.px; lpy=c.py;
-            dot.style.left=c.px+'px'; dot.style.top=c.py+'px'; dot.style.display='block';
-            document.getElementById('lastpos').textContent=`${c.x}, ${c.y}`;
-            if(clickMode){
-              setStatus(`Clicking ${c.x},${c.y}`);
-              api(`/api/mouse?x=${c.x}&y=${c.y}&action=click`)
-                .then(d=>{log(`click → ${c.x},${c.y} [${d.status}] ${d.error||''}`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
-            } else {
-              api(`/api/mouse?x=${c.x}&y=${c.y}&action=move`);
-              log(`cursor → ${c.x},${c.y}`,'info');
-            }
-          });
-
-          function toggleClick(){
-            clickMode=!clickMode;
-            const b=document.getElementById('click-btn');
-            b.innerHTML=`<span class="btn-icon">🖱</span>Click: ${clickMode?'ON':'OFF'}`;
-            b.className='btn'+(clickMode?' on-y':'');
-            log(`click mode ${clickMode?'ON':'OFF'}`,'warn');
-          }
-
-          function toggleAuto(){
-            const b=document.getElementById('auto-btn');
-            if(autoIv){clearInterval(autoIv);autoIv=null;b.innerHTML='<span class="btn-icon">⟳</span>Auto: OFF';b.className='btn';}
-            else{autoIv=setInterval(refresh,2000);b.innerHTML='<span class="btn-icon">⟳</span>Auto: ON';b.className='btn on-g';}
-          }
-
-          function refresh(){ img.src='screen.jpg?t='+Date.now(); }
-
-          function snap(){
-            api('/api/shot').then(()=>{log('snapshot taken','ok');setTimeout(refresh,500);});
-          }
-
-          function dblClick(){
-            if(!lx&&!ly){log('hover image first to set position','err');return;}
-            api(`/api/mouse?x=${lx}&y=${ly}&action=double`)
-              .then(d=>{log(`dbl-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
-          }
-
-          function rgtClick(){
-            if(!lx&&!ly){log('hover image first to set position','err');return;}
-            api(`/api/mouse?x=${lx}&y=${ly}&action=right`)
-              .then(d=>{log(`right-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
-          }
-
-          function key(k){
-            api(`/api/key?key=${encodeURIComponent(k)}`)
-              .then(d=>{log(`key [${k}] → ${d.status}`,d.status==='ok'?'ok':'err');setTimeout(refresh,500);});
-          }
-
-          function dlg(name){
-            setStatus(`Pressing "${name}"…`);
-            api(`/api/dialog?btn=${encodeURIComponent(name)}`)
-              .then(d=>{
-                const ok=d.status==='ok';
-                log(`dialog "${name}" → ${d.status} ${d.out||d.error||''}`,ok?'ok':'err');
-                setStatus(ok?`"${name}" pressed`:`"${name}" failed`,ok);
-                setTimeout(refresh,700);
-              });
-          }
-
-          function doType(){
-            const t=document.getElementById('typetext').value;
-            if(!t)return;
-            api(`/api/type?text=${encodeURIComponent(t)}`)
-              .then(d=>{log(`typed: "${t}" → ${d.status}`,d.status==='ok'?'ok':'err');});
-            document.getElementById('typetext').value='';
-          }
-
-          function openApp(name){
-            api(`/api/open?app=${encodeURIComponent(name)}`)
-              .then(d=>{log(`open ${name} → ${d.status}`,d.status==='ok'?'ok':'err');setTimeout(refresh,1200);});
-          }
-
-          function runShell(){
-            const cmd=document.getElementById('shellcmd').value;
-            if(!cmd)return;
-            api(`/api/shell?cmd=${encodeURIComponent(cmd)}`)
-              .then(d=>{
-                log(`shell: ${cmd}`,d.status==='ok'?'ok':'err');
-                const o=document.getElementById('shellout');
-                o.style.display='block';
-                o.textContent=d.stdout||d.stderr||'(no output)';
-              });
-            document.getElementById('shellcmd').value='';
-          }
-
-          function startVnc(){
-            const b=document.getElementById('vnc-btn');
-            b.innerHTML='<span class="btn-icon">⏳</span>Starting…';
-            b.disabled=true;
-            api('/api/vnc').then(d=>{
-              if(d.status==='ok'){
-                b.innerHTML='<span class="btn-icon">🖥</span>VNC Running';
-                b.className='btn on-g';
-                document.getElementById('vnc-info').style.display='block';
-                document.getElementById('vnc-addr').textContent=d.addr||'<tailscale-ip>:5900';
-                log('VNC server started — connect on :5900 password: apple','ok');
-              } else {
-                b.innerHTML='<span class="btn-icon">🖥</span>Start VNC Server';
-                b.disabled=false;
-                log('VNC error: '+(d.error||'unknown'),'err');
-              }
-            });
-          }
-
-          async function api(path){
-            try{
-              const r=await fetch(path);
-              const d=await r.json();
-              return d;
-            }catch(e){log('fetch error: '+e,'err');return{status:'error'};}
-          }
-
-          snap(); setTimeout(refresh,900);
-          log('control panel ready — quartz session tap + osascript keyboard','ok');
-          </script>
-          </body>
-          </html>
-          ENDHTML
-
-          # ── webserver.py ───────────────────────────────────────────
+          # ── Write webserver ────────────────────────────────────────
           cat > /tmp/stream/webserver.py << 'ENDPY'
           #!/usr/bin/env python3
           import json, os, subprocess, urllib.parse
           from http.server import SimpleHTTPRequestHandler, HTTPServer
-
-          # ── Quartz scripts using kCGSessionEventTap ────────────────
-          # Run via launchctl asuser <GUI_UID> so events land in the
-          # correct WindowServer session — no Accessibility needed.
-          _Q_MOVE = """
-          import Quartz
-          e = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, ({x},{y}), Quartz.kCGMouseButtonLeft)
-          Quartz.CGEventPost(Quartz.kCGSessionEventTap, e)
-          """
 
           _Q_CLICK = """
           import Quartz, time
@@ -571,17 +104,21 @@ jobs:
           Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
           """
 
+          _Q_MOVE = """
+          import Quartz
+          e = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, ({x},{y}), Quartz.kCGMouseButtonLeft)
+          Quartz.CGEventPost(Quartz.kCGSessionEventTap, e)
+          """
+
           KEY_CODES = {
               'tab':48,'enter':36,'return':36,'space':49,'escape':53,'esc':53,
               'left':123,'right':124,'down':125,'up':126,
-              'delete':51,'backspace':51,'forwarddelete':117,
-              'home':115,'end':119,'pageup':116,'pagedown':121,
+              'delete':51,'backspace':51,
           }
           CMD_KEYS = {
               'cmd+a':(0,'command'),'cmd+c':(8,'command'),'cmd+v':(9,'command'),
-              'cmd+z':(6,'command'),'cmd+x':(7,'command'),'cmd+r':(15,'command'),
-              'cmd+q':(12,'command'),'cmd+w':(13,'command'),
-              'cmd+tab':(48,'command'),'cmd+space':(49,'command'),
+              'cmd+z':(6,'command'),'cmd+tab':(48,'command'),'cmd+space':(49,'command'),
+              'cmd+q':(12,'command'),'cmd+w':(13,'command'),'cmd+r':(15,'command'),
           }
 
           def _gui_uid():
@@ -589,22 +126,16 @@ jobs:
 
           def gui_run(args):
               uid = _gui_uid()
-              r = subprocess.run(
-                  ['sudo','launchctl','asuser', uid] + args,
-                  capture_output=True, text=True, timeout=10
-              )
-              return r.returncode == 0, (r.stdout+r.stderr).strip()
+              r = subprocess.run(['sudo','launchctl','asuser',uid]+args,
+                                 capture_output=True, text=True, timeout=10)
+              return r.returncode==0, (r.stdout+r.stderr).strip()
 
-          # ── KEY FIX: run Quartz via GUI user session ───────────────
-          # kCGSessionEventTap posts into the WindowServer session of
-          # the logged-in user — no root required, no Accessibility.
           def quartz(script):
               uid = _gui_uid()
               r = subprocess.run(
-                  ['sudo', 'launchctl', 'asuser', uid, 'python3', '-c', script],
-                  capture_output=True, text=True, timeout=10
-              )
-              return r.returncode == 0, (r.stdout+r.stderr).strip()
+                  ['sudo','launchctl','asuser',uid,'python3','-c',script],
+                  capture_output=True, text=True, timeout=10)
+              return r.returncode==0, (r.stdout+r.stderr).strip()
 
           def osa(script):
               return gui_run(['osascript','-e',script])
@@ -612,7 +143,7 @@ jobs:
           def send_key(key):
               k = key.lower().strip()
               if k in CMD_KEYS:
-                  code, mod = CMD_KEYS[k]
+                  code,mod = CMD_KEYS[k]
                   return osa(f'tell application "System Events" to key code {code} using {{{mod} down}}')
               if k in KEY_CODES:
                   return osa(f'tell application "System Events" to key code {KEY_CODES[k]}')
@@ -622,17 +153,17 @@ jobs:
           def dialog_btn(name):
               n = name.replace('"','\\"')
               script = f'''tell application "System Events"
-              repeat with proc in every process
-                  try
-                      repeat with win in every window of proc
-                          try
-                              click button "{n}" of win
-                              return "clicked"
-                          end try
-                      end repeat
-                  end try
-              end repeat
-          end tell'''
+                  repeat with proc in every process
+                      try
+                          repeat with win in every window of proc
+                              try
+                                  click button "{n}" of win
+                                  return "clicked"
+                              end try
+                          end repeat
+                      end try
+                  end repeat
+              end tell'''
               return osa(script)
 
           class Handler(SimpleHTTPRequestHandler):
@@ -640,7 +171,7 @@ jobs:
                   p = urllib.parse.urlparse(self.path)
                   if p.path.startswith('/api/'):
                       self._api(p.path, urllib.parse.parse_qs(p.query))
-                  elif p.path in ('/', '/index.html'):
+                  elif p.path in ('/','/index.html'):
                       data = open('/tmp/stream/index.html','rb').read()
                       self.send_response(200)
                       self.send_header('Content-Type','text/html')
@@ -652,115 +183,58 @@ jobs:
               def _api(self, path, q):
                   try:
                       if path == '/api/mouse':
-                          x = int(q.get('x',['0'])[0])
-                          y = int(q.get('y',['0'])[0])
-                          act = q.get('action',['move'])[0]
-                          if   act == 'click':  ok,e = quartz(_Q_CLICK.format(x=x,y=y))
-                          elif act == 'double': ok,e = quartz(_Q_DBL.format(x=x,y=y))
-                          elif act == 'right':  ok,e = quartz(_Q_RIGHT.format(x=x,y=y))
-                          else:                 ok,e = quartz(_Q_MOVE.format(x=x,y=y))
-                          return self._r({'status':'ok' if ok else 'error','error':e,'x':x,'y':y})
+                          x=int(q.get('x',['0'])[0]); y=int(q.get('y',['0'])[0])
+                          act=q.get('action',['move'])[0]
+                          if   act=='click':  ok,e=quartz(_Q_CLICK.format(x=x,y=y))
+                          elif act=='double': ok,e=quartz(_Q_DBL.format(x=x,y=y))
+                          elif act=='right':  ok,e=quartz(_Q_RIGHT.format(x=x,y=y))
+                          else:               ok,e=quartz(_Q_MOVE.format(x=x,y=y))
+                          return self._r({'status':'ok' if ok else 'error','error':e})
 
                       if path == '/api/key':
-                          k = q.get('key',[''])[0]; ok,o = send_key(k)
-                          return self._r({'status':'ok' if ok else 'error','key':k,'out':o})
+                          k=q.get('key',[''])[0]; ok,o=send_key(k)
+                          return self._r({'status':'ok' if ok else 'error','out':o})
 
                       if path == '/api/type':
-                          t = q.get('text',[''])[0]
-                          s = t.replace('\\','\\\\').replace('"','\\"')
-                          ok,o = osa(f'tell application "System Events" to keystroke "{s}"')
+                          t=q.get('text',[''])[0]
+                          s=t.replace('\\','\\\\').replace('"','\\"')
+                          ok,o=osa(f'tell application "System Events" to keystroke "{s}"')
                           return self._r({'status':'ok' if ok else 'error'})
 
                       if path == '/api/dialog':
-                          b = q.get('btn',['Allow'])[0]; ok,o = dialog_btn(b)
-                          return self._r({'status':'ok' if ok else 'error','btn':b,'out':o})
+                          b=q.get('btn',['Allow'])[0]; ok,o=dialog_btn(b)
+                          return self._r({'status':'ok' if ok else 'error','out':o})
 
                       if path == '/api/shot':
                           subprocess.run(['screencapture','-x','-C','/tmp/stream/screen.jpg'])
                           return self._r({'status':'ok'})
 
                       if path == '/api/open':
-                          app = q.get('app',['Safari'])[0]
+                          app=q.get('app',['Safari'])[0]
                           gui_run(['open','-a',app])
-                          return self._r({'status':'ok','app':app})
+                          return self._r({'status':'ok'})
 
                       if path == '/api/shell':
-                          cmd = q.get('cmd',[''])[0]
-                          res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+                          cmd=q.get('cmd',[''])[0]
+                          res=subprocess.run(cmd,shell=True,capture_output=True,text=True,timeout=15)
                           return self._r({'status':'ok','stdout':res.stdout,'stderr':res.stderr})
 
-                      if path == '/api/vnc':
-                          errors = []
-                          # Step 1: Load screensharing daemon
-                          subprocess.run([
-                              'sudo','launchctl','load','-w',
-                              '/System/Library/LaunchDaemons/com.apple.screensharing.plist'
-                          ], capture_output=True, text=True, timeout=10)
-
-                          # Step 2: Enable VNC legacy password toggle via defaults
-                          subprocess.run([
-                              'sudo','defaults','write',
-                              '/Library/Preferences/com.apple.RemoteManagement',
-                              'VNCLegacyEnabled','-bool','true'
-                          ], capture_output=True, text=True, timeout=5)
-
-                          # Step 3: Write VNC password (DES-obfuscated, 8 bytes)
+                      if path == '/api/vnc_status':
+                          # Returns current VNC state for UI
                           try:
-                              pwd = b'apple\x00\x00\x00'
-                              key = [23,82,107,6,35,78,88,7]
-                              enc = bytes([pwd[i] ^ key[i] for i in range(8)])
-                              os.makedirs('/Library/Preferences/', exist_ok=True)
-                              with open('/Library/Preferences/VNCSettings.txt','wb') as f:
-                                  f.write(enc)
-                          except Exception as ve:
-                              errors.append(str(ve))
-
-                          # Step 4: ARDAgent kickstart — activate + set VNC password
-                          r1 = subprocess.run([
-                              'sudo',
-                              '/System/Library/CoreServices/RemoteManagement/'
-                              'ARDAgent.app/Contents/Resources/kickstart',
-                              '-activate', '-configure',
-                              '-clientopts',
-                              '-setvnclegacy', '-vnclegacy', 'yes',
-                              '-setvncpwd',    '-vncpwd',    'apple',
-                              '-access',       '-on',
-                              '-allowAccessFor', '-allUsers',
-                              '-restart', '-agent'
-                          ], capture_output=True, text=True, timeout=30)
-                          if r1.returncode != 0:
-                              errors.append(r1.stdout+r1.stderr)
-
-                          # Step 5: Restart screensharing service
-                          subprocess.run([
-                              'sudo','launchctl','kickstart','-k',
-                              'system/com.apple.screensharing'
-                          ], capture_output=True, text=True, timeout=10)
-
-                          # Get Tailscale IP
-                          try:
-                              ts = subprocess.run(
-                                  ['/opt/homebrew/bin/tailscale','ip','-4'],
-                                  capture_output=True, text=True, timeout=5
-                              ).stdout.strip()
-                              addr = f'{ts}:5900'
+                              ts=subprocess.run(['/opt/homebrew/bin/tailscale','ip','-4'],
+                                                capture_output=True,text=True,timeout=5).stdout.strip()
+                              addr=f'{ts}:5900'
                           except Exception:
-                              addr = '<tailscale-ip>:5900'
-
-                          ok = r1.returncode == 0
-                          return self._r({
-                              'status': 'ok' if ok else 'error',
-                              'addr':   addr,
-                              'out':    r1.stdout+r1.stderr,
-                              'errors': errors
-                          })
+                              addr='<tailscale-ip>:5900'
+                          return self._r({'status':'ok','addr':addr,'password':'apple'})
 
                   except Exception as e:
-                      return self._r({'status':'error','error':str(e)}, 500)
+                      return self._r({'status':'error','error':str(e)},500)
                   self.send_response(404); self.end_headers()
 
               def _r(self, data, code=200):
-                  body = json.dumps(data).encode()
+                  body=json.dumps(data).encode()
                   self.send_response(code)
                   self.send_header('Content-Type','application/json')
                   self.send_header('Access-Control-Allow-Origin','*')
@@ -770,11 +244,10 @@ jobs:
               def log_message(self,*a): pass
 
           os.chdir('/tmp/stream')
-          print('[+] webserver running :8000')
+          print('[+] webserver on :8000')
           HTTPServer(('0.0.0.0',8000),Handler).serve_forever()
           ENDPY
 
-          # ── Launch webserver as root (required for launchctl asuser) ──
           sudo nohup python3 /tmp/stream/webserver.py > /tmp/webserver.log 2>&1 &
           sleep 2
           echo "[+] webserver PID: $(pgrep -f webserver.py)"
@@ -785,15 +258,18 @@ jobs:
           sudo /opt/homebrew/bin/tailscaled > /dev/null 2>&1 &
           sleep 10
           sudo /opt/homebrew/bin/tailscale up \
-            --authkey=tskey-auth-kduf1RMHVe11CNTRL-8kEeawiw7FTVj6L5adxtETBLxkVZMpXX \
+            --authkey=tskey-auth-ktQmDD4sz521CNTRL-nEQ4CuBDRy1h8mPKipGey1PLwtd9hWgE \
             --hostname=gh-macos-forensic
 
       - name: Session Maintenance
         run: |
           TS_IP=$(/opt/homebrew/bin/tailscale ip -4)
-          echo "────────────────────────────────────────"
-          echo "  WEB : http://$TS_IP:8000"
-          echo "────────────────────────────────────────"
+          echo "════════════════════════════════════"
+          echo "  WEB PANEL : http://$TS_IP:8000"
+          echo "  VNC HOST  : $TS_IP"
+          echo "  VNC PORT  : 5900"
+          echo "  VNC PASS  : apple"
+          echo "════════════════════════════════════"
           while true; do
             echo "[$(date '+%H:%M:%S')] alive · $TS_IP"
             sleep 600
