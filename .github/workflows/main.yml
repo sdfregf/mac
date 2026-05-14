@@ -9,18 +9,6 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Create User "apple"
-        run: |
-          sudo dscl . -create /Users/apple
-          sudo dscl . -create /Users/apple UserShell /bin/zsh
-          sudo dscl . -create /Users/apple RealName "Apple Forensic"
-          sudo dscl . -create /Users/apple UniqueID 502
-          sudo dscl . -create /Users/apple PrimaryGroupID 20
-          sudo dscl . -create /Users/apple NFSHomeDirectory /Users/apple
-          sudo dscl . -passwd /Users/apple "apple"
-          sudo dscl . -append /Groups/admin GroupMembership apple
-          sudo createhomedir -c -u apple > /dev/null 2>&1
-
       - name: Setup Screen, Webserver & UI
         run: |
           sudo pmset -a displaysleep 0 sleep 0 disksleep 0
@@ -32,15 +20,15 @@ jobs:
           echo "$GUI_USER" > /tmp/gui_user
           mkdir -p /tmp/stream
 
-          # ── FIX 1: Install Quartz (fixes click ModuleNotFoundError) ──
+          # ── FIX 1: Install Quartz ──
           pip3 install pyobjc-framework-Quartz --break-system-packages --quiet
 
-          # ── Screencap loop ─────────────────────────────────────────
+          # ── Screencap loop (Optimized for Max FPS) ─────────────────
           cat > /tmp/screencap_loop.sh << 'SCREENCAP'
           #!/bin/bash
           while true; do
-            screencapture -x -C /tmp/stream/screen.jpg 2>/dev/null
-            sleep 2
+            screencapture -x -C /tmp/stream/screen_tmp.jpg 2>/dev/null
+            mv /tmp/stream/screen_tmp.jpg /tmp/stream/screen.jpg
           done
           SCREENCAP
           chmod +x /tmp/screencap_loop.sh
@@ -58,58 +46,35 @@ jobs:
           <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
           <style>
             :root {
-              --bg:      #060608;
-              --s0:      #0c0c10;
-              --s1:      #111118;
-              --s2:      #18181f;
-              --border:  #22222e;
-              --border2: #2e2e3e;
-              --accent:  #4af;
-              --accentd: #0a1e2e;
-              --green:   #2dce6e;
-              --greend:  #0a1e14;
-              --red:     #ff4d5e;
-              --redd:    #200a0c;
-              --yellow:  #f5c842;
-              --yelld:   #201800;
-              --text:    #d8d8e8;
-              --muted:   #55556a;
+              --bg:      #060608; --s0:      #0c0c10;
+              --s1:      #111118; --s2:      #18181f;
+              --border:  #22222e; --border2: #2e2e3e;
+              --accent:  #4af;    --accentd: #0a1e2e;
+              --green:   #2dce6e; --greend:  #0a1e14;
+              --red:     #ff4d5e; --redd:    #200a0c;
+              --yellow:  #f5c842; --yelld:   #201800;
+              --text:    #d8d8e8; --muted:   #55556a;
               --muted2:  #3a3a50;
             }
             *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
             html, body { height: 100%; overflow: hidden; }
             body {
-              background: var(--bg);
-              color: var(--text);
+              background: var(--bg); color: var(--text);
               font-family: 'IBM Plex Mono', monospace;
-              font-size: 12px;
-              display: flex;
-              flex-direction: column;
+              font-size: 12px; display: flex; flex-direction: column;
             }
             .topbar {
-              display: flex;
-              align-items: center;
-              gap: 10px;
-              padding: 0 14px;
-              height: 38px;
-              background: var(--s0);
-              border-bottom: 1px solid var(--border);
-              flex-shrink: 0;
-              z-index: 10;
+              display: flex; align-items: center; gap: 10px;
+              padding: 0 14px; height: 38px; background: var(--s0);
+              border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 10;
             }
             .topbar-title {
-              font-size: 11px;
-              font-weight: 600;
-              letter-spacing: .12em;
-              text-transform: uppercase;
-              color: var(--accent);
+              font-size: 11px; font-weight: 600; letter-spacing: .12em;
+              text-transform: uppercase; color: var(--accent);
             }
             .badge {
-              font-size: 10px;
-              padding: 2px 7px;
-              border-radius: 3px;
-              border: 1px solid;
-              letter-spacing: .06em;
+              font-size: 10px; padding: 2px 7px; border-radius: 3px;
+              border: 1px solid; letter-spacing: .06em;
             }
             .badge-quartz  { color: #7c6cff; border-color: #3a2e6e; background: #0e0c1e; }
             .badge-live    { color: var(--green); border-color: #1a4a2a; background: var(--greend); animation: pulse 2s infinite; }
@@ -118,43 +83,24 @@ jobs:
             #topcords  { font-size: 11px; color: var(--muted); min-width: 110px; text-align: right; }
             .body { display: flex; flex: 1; overflow: hidden; }
             .sidebar {
-              width: 210px;
-              min-width: 210px;
-              background: var(--s0);
-              border-right: 1px solid var(--border);
-              display: flex;
-              flex-direction: column;
-              overflow-y: auto;
-              overflow-x: hidden;
+              width: 210px; min-width: 210px; background: var(--s0);
+              border-right: 1px solid var(--border); display: flex;
+              flex-direction: column; overflow-y: auto; overflow-x: hidden;
             }
             .sidebar::-webkit-scrollbar { width: 4px; }
             .sidebar::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
             .panel { border-bottom: 1px solid var(--border); padding: 10px; }
             .panel-title {
-              font-size: 9px;
-              font-weight: 600;
-              letter-spacing: .14em;
-              text-transform: uppercase;
-              color: var(--muted);
-              margin-bottom: 8px;
+              font-size: 9px; font-weight: 600; letter-spacing: .14em;
+              text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
             }
             .btn {
-              display: flex;
-              align-items: center;
-              gap: 6px;
-              width: 100%;
-              padding: 6px 9px;
-              background: var(--s1);
-              color: var(--text);
-              border: 1px solid var(--border);
-              border-radius: 4px;
-              cursor: pointer;
-              font-family: 'IBM Plex Mono', monospace;
-              font-size: 11px;
-              margin-bottom: 3px;
-              transition: background .12s, border-color .12s, color .12s;
-              text-align: left;
-              white-space: nowrap;
+              display: flex; align-items: center; gap: 6px; width: 100%;
+              padding: 6px 9px; background: var(--s1); color: var(--text);
+              border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+              font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+              margin-bottom: 3px; transition: background .12s, border-color .12s, color .12s;
+              text-align: left; white-space: nowrap;
             }
             .btn:hover { background: var(--s2); border-color: var(--border2); }
             .btn.g  { border-color: #1a3520; }
@@ -173,69 +119,39 @@ jobs:
             .arrowgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 3px; }
             .arrowgrid .btn { margin: 0; justify-content: center; padding: 5px; font-size: 13px; }
             .inp {
-              width: 100%;
-              background: var(--bg);
-              border: 1px solid var(--border2);
-              color: var(--text);
-              padding: 6px 8px;
-              border-radius: 4px;
-              font-family: 'IBM Plex Mono', monospace;
-              font-size: 11px;
-              margin-bottom: 4px;
-              outline: none;
-              transition: border-color .15s;
+              width: 100%; background: var(--bg); border: 1px solid var(--border2);
+              color: var(--text); padding: 6px 8px; border-radius: 4px;
+              font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+              margin-bottom: 4px; outline: none; transition: border-color .15s;
             }
             .inp:focus { border-color: var(--accent); }
             .screen-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; }
             .screen-scroll {
-              flex: 1;
-              overflow: auto;
-              position: relative;
-              display: flex;
-              align-items: flex-start;
-              justify-content: flex-start;
+              flex: 1; overflow: auto; position: relative; display: flex;
+              align-items: flex-start; justify-content: flex-start;
             }
             #screen {
-              display: block;
-              max-width: 100%;
-              cursor: crosshair;
-              user-select: none;
-              -webkit-user-drag: none;
-              image-rendering: -webkit-optimize-contrast;
+              display: block; max-width: 100%; cursor: crosshair; user-select: none;
+              -webkit-user-drag: none; image-rendering: -webkit-optimize-contrast;
             }
             #cursor-dot {
-              position: absolute;
-              width: 16px; height: 16px;
-              border-radius: 50%;
-              background: rgba(255,60,60,.9);
-              border: 2px solid #fff;
+              position: absolute; width: 16px; height: 16px; border-radius: 50%;
+              background: rgba(255,60,60,.9); border: 2px solid #fff;
               box-shadow: 0 0 10px rgba(0,0,0,.7), 0 0 4px rgba(255,60,60,.5);
-              pointer-events: none;
-              transform: translate(-50%,-50%);
-              display: none;
-              z-index: 9;
-              transition: left .08s, top .08s;
+              pointer-events: none; transform: translate(-50%,-50%);
+              display: none; z-index: 9; transition: left .08s, top .08s;
             }
             .toolbar {
-              display: flex;
-              align-items: center;
-              gap: 5px;
-              padding: 5px 10px;
-              background: var(--s0);
-              border-top: 1px solid var(--border);
-              flex-shrink: 0;
-              flex-wrap: wrap;
+              display: flex; align-items: center; gap: 5px; padding: 5px 10px;
+              background: var(--s0); border-top: 1px solid var(--border);
+              flex-shrink: 0; flex-wrap: wrap;
             }
             .toolbar .btn { width: auto; margin: 0; padding: 4px 10px; font-size: 10px; }
             .sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
             .toolbar-right { margin-left: auto; font-size: 10px; color: var(--muted); }
             .logbar {
-              height: 56px;
-              overflow-y: auto;
-              background: var(--bg);
-              border-top: 1px solid var(--border);
-              padding: 3px 10px;
-              flex-shrink: 0;
+              height: 56px; overflow-y: auto; background: var(--bg);
+              border-top: 1px solid var(--border); padding: 3px 10px; flex-shrink: 0;
             }
             .logbar::-webkit-scrollbar { width: 3px; }
             .logbar::-webkit-scrollbar-thumb { background: var(--border); }
@@ -245,12 +161,8 @@ jobs:
             .logline.info { color: var(--accent); }
             .logline.warn { color: var(--yellow); }
             .divlabel {
-              font-size: 9px;
-              letter-spacing: .1em;
-              text-transform: uppercase;
-              color: var(--muted2);
-              text-align: center;
-              padding: 4px 0 2px;
+              font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+              color: var(--muted2); text-align: center; padding: 4px 0 2px;
             }
           </style>
           </head>
@@ -328,16 +240,6 @@ jobs:
               </div>
 
               <div class="panel">
-                <div class="panel-title">VNC Screen Sharing</div>
-                <button class="btn g" id="vnc-btn" onclick="startVnc()"><span class="btn-icon">🖥</span>Start VNC Server</button>
-                <div id="vnc-info" style="display:none;margin-top:6px;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;font-size:10px;line-height:1.7;">
-                  <span style="color:var(--green)">● VNC running on :5900</span><br>
-                  <span style="color:var(--muted)">Password: </span><span style="color:var(--yellow)">apple</span><br>
-                  <span style="color:var(--muted)">Connect: </span><span id="vnc-addr" style="color:var(--accent)">—</span>
-                </div>
-              </div>
-
-              <div class="panel">
                 <div class="panel-title">Shell</div>
                 <input class="inp" id="shellcmd" placeholder="shell command..." onkeydown="if(event.key==='Enter')runShell()">
                 <button class="btn" onclick="runShell()"><span class="btn-icon">▶</span>Run</button>
@@ -370,10 +272,10 @@ jobs:
 
           <script>
           const SW=2560, SH=1664;
-          let autoIv=null, clickMode=false, lx=0, ly=0, lpx=0, lpy=0;
+          let autoActive=false, clickMode=false, lx=0, ly=0, lpx=0, lpy=0;
           const img=document.getElementById('screen');
           const dot=document.getElementById('cursor-dot');
-
+          
           function log(msg,cls='info'){
             const b=document.getElementById('logbar');
             const d=document.createElement('div');
@@ -383,6 +285,7 @@ jobs:
             b.prepend(d);
             while(b.children.length>60) b.removeChild(b.lastChild);
           }
+          
           function setStatus(msg,ok){
             document.getElementById('topstatus').textContent=msg;
             document.getElementById('topstatus').style.color=ok===false?'var(--red)':'var(--muted)';
@@ -399,7 +302,7 @@ jobs:
             const c=coords(e);
             document.getElementById('topcords').textContent=`x:${c.x} y:${c.y}`;
           });
-
+          
           img.addEventListener('click',e=>{
             const c=coords(e);
             lx=c.x; ly=c.y; lpx=c.px; lpy=c.py;
@@ -408,13 +311,13 @@ jobs:
             if(clickMode){
               setStatus(`Clicking ${c.x},${c.y}`);
               api(`/api/mouse?x=${c.x}&y=${c.y}&action=click`)
-                .then(d=>{log(`click → ${c.x},${c.y} [${d.status}] ${d.error||''}`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
+                .then(d=>{log(`click → ${c.x},${c.y} [${d.status}] ${d.error||''}`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
             } else {
               api(`/api/mouse?x=${c.x}&y=${c.y}&action=move`);
               log(`cursor → ${c.x},${c.y}`,'info');
             }
           });
-
+          
           function toggleClick(){
             clickMode=!clickMode;
             const b=document.getElementById('click-btn');
@@ -425,31 +328,49 @@ jobs:
 
           function toggleAuto(){
             const b=document.getElementById('auto-btn');
-            if(autoIv){clearInterval(autoIv);autoIv=null;b.innerHTML='<span class="btn-icon">⟳</span>Auto: OFF';b.className='btn';}
-            else{autoIv=setInterval(refresh,2000);b.innerHTML='<span class="btn-icon">⟳</span>Auto: ON';b.className='btn on-g';}
+            autoActive = !autoActive;
+            if(!autoActive){
+               b.innerHTML='<span class="btn-icon">⟳</span>Auto: OFF';
+               b.className='btn';
+            } else {
+               b.innerHTML='<span class="btn-icon">⟳</span>Auto: ON';
+               b.className='btn on-g';
+               streamNext();
+            }
+          }
+
+          function streamNext() {
+            if(!autoActive) return;
+            const tempImg = new Image();
+            tempImg.onload = () => {
+                img.src = tempImg.src;
+                requestAnimationFrame(streamNext);
+            };
+            tempImg.onerror = () => { setTimeout(streamNext, 50); };
+            tempImg.src = 'screen.jpg?t=' + Date.now();
           }
 
           function refresh(){ img.src='screen.jpg?t='+Date.now(); }
 
           function snap(){
-            api('/api/shot').then(()=>{log('snapshot taken','ok');setTimeout(refresh,500);});
+            api('/api/shot').then(()=>{log('snapshot taken','ok');if(!autoActive)setTimeout(refresh,500);});
           }
 
           function dblClick(){
             if(!lx&&!ly){log('hover image first to set position','err');return;}
             api(`/api/mouse?x=${lx}&y=${ly}&action=double`)
-              .then(d=>{log(`dbl-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
+              .then(d=>{log(`dbl-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
           }
 
           function rgtClick(){
             if(!lx&&!ly){log('hover image first to set position','err');return;}
             api(`/api/mouse?x=${lx}&y=${ly}&action=right`)
-              .then(d=>{log(`right-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
+              .then(d=>{log(`right-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
           }
 
           function key(k){
             api(`/api/key?key=${encodeURIComponent(k)}`)
-              .then(d=>{log(`key [${k}] → ${d.status}`,d.status==='ok'?'ok':'err');setTimeout(refresh,500);});
+              .then(d=>{log(`key [${k}] → ${d.status}`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,500);});
           }
 
           function dlg(name){
@@ -459,7 +380,7 @@ jobs:
                 const ok=d.status==='ok';
                 log(`dialog "${name}" → ${d.status} ${d.out||d.error||''}`,ok?'ok':'err');
                 setStatus(ok?`"${name}" pressed`:`"${name}" failed`,ok);
-                setTimeout(refresh,700);
+                if(!autoActive)setTimeout(refresh,700);
               });
           }
 
@@ -473,7 +394,7 @@ jobs:
 
           function openApp(name){
             api(`/api/open?app=${encodeURIComponent(name)}`)
-              .then(d=>{log(`open ${name} → ${d.status}`,d.status==='ok'?'ok':'err');setTimeout(refresh,1200);});
+              .then(d=>{log(`open ${name} → ${d.status}`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,1200);});
           }
 
           function runShell(){
@@ -489,25 +410,6 @@ jobs:
             document.getElementById('shellcmd').value='';
           }
 
-          function startVnc(){
-            const b=document.getElementById('vnc-btn');
-            b.innerHTML='<span class="btn-icon">⏳</span>Starting…';
-            b.disabled=true;
-            api('/api/vnc').then(d=>{
-              if(d.status==='ok'){
-                b.innerHTML='<span class="btn-icon">🖥</span>VNC Running';
-                b.className='btn on-g';
-                document.getElementById('vnc-info').style.display='block';
-                document.getElementById('vnc-addr').textContent=d.addr||'<tailscale-ip>:5900';
-                log('VNC server started — connect on :5900 password: apple','ok');
-              } else {
-                b.innerHTML='<span class="btn-icon">🖥</span>Start VNC Server';
-                b.disabled=false;
-                log('VNC error: '+(d.error||'unknown'),'err');
-              }
-            });
-          }
-
           async function api(path){
             try{
               const r=await fetch(path);
@@ -516,7 +418,8 @@ jobs:
             }catch(e){log('fetch error: '+e,'err');return{status:'error'};}
           }
 
-          snap(); setTimeout(refresh,900);
+          snap();
+          setTimeout(refresh,900);
           log('control panel ready — quartz session tap + osascript keyboard','ok');
           </script>
           </body>
@@ -532,20 +435,20 @@ jobs:
           _Q_MOVE = """
           import Quartz
           e = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, ({x},{y}), Quartz.kCGMouseButtonLeft)
-          Quartz.CGEventPost(Quartz.kCGSessionEventTap, e)
+          Quartz.CGEventPost(Quartz.kCGHIDEventTap, e)
           """
 
           _Q_CLICK = """
           import Quartz, time
           def click(x, y):
               mv = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, (x,y), Quartz.kCGMouseButtonLeft)
-              Quartz.CGEventPost(Quartz.kCGSessionEventTap, mv)
-              time.sleep(0.05)
+              Quartz.CGEventPost(Quartz.kCGHIDEventTap, mv)
+              time.sleep(0.01)
               dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, (x,y), Quartz.kCGMouseButtonLeft)
-              Quartz.CGEventPost(Quartz.kCGSessionEventTap, dn)
-              time.sleep(0.05)
+              Quartz.CGEventPost(Quartz.kCGHIDEventTap, dn)
+              time.sleep(0.01)
               up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, (x,y), Quartz.kCGMouseButtonLeft)
-              Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
+              Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
           click({x},{y})
           """
 
@@ -554,10 +457,10 @@ jobs:
           def dbl(x, y):
               for _ in range(2):
                   dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, (x,y), Quartz.kCGMouseButtonLeft)
-                  Quartz.CGEventPost(Quartz.kCGSessionEventTap, dn)
-                  time.sleep(0.05)
+                  Quartz.CGEventPost(Quartz.kCGHIDEventTap, dn)
+                  time.sleep(0.01)
                   up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, (x,y), Quartz.kCGMouseButtonLeft)
-                  Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
+                  Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
                   time.sleep(0.07)
           dbl({x},{y})
           """
@@ -565,10 +468,10 @@ jobs:
           _Q_RIGHT = """
           import Quartz, time
           dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventRightMouseDown, ({x},{y}), Quartz.kCGMouseButtonRight)
-          Quartz.CGEventPost(Quartz.kCGSessionEventTap, dn)
-          time.sleep(0.05)
+          Quartz.CGEventPost(Quartz.kCGHIDEventTap, dn)
+          time.sleep(0.01)
           up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventRightMouseUp, ({x},{y}), Quartz.kCGMouseButtonRight)
-          Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
+          Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
           """
 
           KEY_CODES = {
@@ -642,7 +545,8 @@ jobs:
                       self.send_response(200)
                       self.send_header('Content-Type','text/html')
                       self.send_header('Content-Length',str(len(data)))
-                      self.end_headers(); self.wfile.write(data)
+                      self.end_headers()
+                      self.wfile.write(data)
                   else:
                       super().do_GET()
 
@@ -659,7 +563,8 @@ jobs:
                           return self._r({'status':'ok' if ok else 'error','error':e,'x':x,'y':y})
 
                       if path == '/api/key':
-                          k = q.get('key',[''])[0]; ok,o = send_key(k)
+                          k = q.get('key',[''])[0]
+                          ok,o = send_key(k)
                           return self._r({'status':'ok' if ok else 'error','key':k,'out':o})
 
                       if path == '/api/type':
@@ -669,11 +574,13 @@ jobs:
                           return self._r({'status':'ok' if ok else 'error'})
 
                       if path == '/api/dialog':
-                          b = q.get('btn',['Allow'])[0]; ok,o = dialog_btn(b)
+                          b = q.get('btn',['Allow'])[0]
+                          ok,o = dialog_btn(b)
                           return self._r({'status':'ok' if ok else 'error','btn':b,'out':o})
 
                       if path == '/api/shot':
-                          subprocess.run(['screencapture','-x','-C','/tmp/stream/screen.jpg'])
+                          subprocess.run(['screencapture','-x','-C','/tmp/stream/screen_tmp.jpg'])
+                          subprocess.run(['mv','/tmp/stream/screen_tmp.jpg','/tmp/stream/screen.jpg'])
                           return self._r({'status':'ok'})
 
                       if path == '/api/open':
@@ -686,70 +593,10 @@ jobs:
                           res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
                           return self._r({'status':'ok','stdout':res.stdout,'stderr':res.stderr})
 
-                      if path == '/api/vnc':
-                          errors = []
-                          subprocess.run([
-                              'sudo','launchctl','load','-w',
-                              '/System/Library/LaunchDaemons/com.apple.screensharing.plist'
-                          ], capture_output=True, text=True, timeout=10)
-
-                          subprocess.run([
-                              'sudo','defaults','write',
-                              '/Library/Preferences/com.apple.RemoteManagement',
-                              'VNCLegacyEnabled','-bool','true'
-                          ], capture_output=True, text=True, timeout=5)
-
-                          # FIX 2: correct filename with com.apple. prefix
-                          try:
-                              pwd = b'apple\x00\x00\x00'
-                              key = [23,82,107,6,35,78,88,7]
-                              enc = bytes([pwd[i] ^ key[i] for i in range(8)])
-                              os.makedirs('/Library/Preferences/', exist_ok=True)
-                              with open('/Library/Preferences/com.apple.VNCSettings.txt','wb') as f:
-                                  f.write(enc)
-                          except Exception as ve:
-                              errors.append(str(ve))
-
-                          r1 = subprocess.run([
-                              'sudo',
-                              '/System/Library/CoreServices/RemoteManagement/'
-                              'ARDAgent.app/Contents/Resources/kickstart',
-                              '-activate', '-configure',
-                              '-clientopts',
-                              '-setvnclegacy', '-vnclegacy', 'yes',
-                              '-setvncpwd',    '-vncpwd',    'apple',
-                              '-access',       '-on',
-                              '-allowAccessFor', '-allUsers',
-                              '-restart', '-agent'
-                          ], capture_output=True, text=True, timeout=30)
-                          if r1.returncode != 0:
-                              errors.append(r1.stdout+r1.stderr)
-
-                          subprocess.run([
-                              'sudo','launchctl','kickstart','-k',
-                              'system/com.apple.screensharing'
-                          ], capture_output=True, text=True, timeout=10)
-
-                          try:
-                              ts = subprocess.run(
-                                  ['/opt/homebrew/bin/tailscale','ip','-4'],
-                                  capture_output=True, text=True, timeout=5
-                              ).stdout.strip()
-                              addr = f'{ts}:5900'
-                          except Exception:
-                              addr = '<tailscale-ip>:5900'
-
-                          ok = r1.returncode == 0
-                          return self._r({
-                              'status': 'ok' if ok else 'error',
-                              'addr':   addr,
-                              'out':    r1.stdout+r1.stderr,
-                              'errors': errors
-                          })
-
                   except Exception as e:
                       return self._r({'status':'error','error':str(e)}, 500)
-                  self.send_response(404); self.end_headers()
+                  self.send_response(404)
+                  self.end_headers()
 
               def _r(self, data, code=200):
                   body = json.dumps(data).encode()
@@ -757,7 +604,8 @@ jobs:
                   self.send_header('Content-Type','application/json')
                   self.send_header('Access-Control-Allow-Origin','*')
                   self.send_header('Content-Length',str(len(body)))
-                  self.end_headers(); self.wfile.write(body)
+                  self.end_headers()
+                  self.wfile.write(body)
 
               def log_message(self,*a): pass
 
@@ -776,7 +624,7 @@ jobs:
           sudo /opt/homebrew/bin/tailscaled > /dev/null 2>&1 &
           sleep 10
           sudo /opt/homebrew/bin/tailscale up \
-            --authkey=tskey-auth-kNWbLrKkXa11CNTRL-jSWbmy6FHbQUAoAdQk2NbQM5nRHVJLRA2 \
+            --authkey=tskey-auth-k81CzgN71p11CNTRL-68TU8UorYBNsuUmCDCccBND4sGB38GAF \
             --hostname=gh-macos-forensic
 
       - name: Session Maintenance
@@ -784,7 +632,6 @@ jobs:
           TS_IP=$(/opt/homebrew/bin/tailscale ip -4)
           echo "────────────────────────────────────────"
           echo "  WEB : http://$TS_IP:8000"
-          echo "  VNC : $TS_IP:5900  pass: apple"
           echo "────────────────────────────────────────"
           while true; do
             echo "[$(date '+%H:%M:%S')] alive · $TS_IP"
