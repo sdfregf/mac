@@ -20,10 +20,10 @@ jobs:
           echo "$GUI_USER" > /tmp/gui_user
           mkdir -p /tmp/stream
 
-          # ── FIX 1: Install Quartz ──
-          pip3 install pyobjc-framework-Quartz --break-system-packages --quiet
+          # ── Install Quartz ──
+          pip3 install pyobjc-framework-Quartz pyobjc-framework-ApplicationServices --break-system-packages --quiet
 
-          # ── Screencap loop (Optimized for Max FPS) ─────────────────
+          # ── Screencap loop (Optimized) ─────────────────────────────
           cat > /tmp/screencap_loop.sh << 'SCREENCAP'
           #!/bin/bash
           while true; do
@@ -180,11 +180,16 @@ jobs:
             <div class="sidebar">
 
               <div class="panel">
+                <div class="panel-title">System & Permissions</div>
+                <button class="btn on-y" onclick="reqAx()"><span class="btn-icon">🔐</span>Req Accessibility</button>
+                <button class="btn"   onclick="dlg('Open System Settings')"><span class="btn-icon">⚙</span>System Settings</button>
+              </div>
+
+              <div class="panel">
                 <div class="panel-title">Dialog Buttons</div>
                 <button class="btn g" onclick="dlg('Allow')"><span class="btn-icon">✓</span>Allow</button>
                 <button class="btn g" onclick="dlg('OK')"><span class="btn-icon">✓</span>OK</button>
                 <button class="btn r" onclick="dlg('Don\'t Allow')"><span class="btn-icon">✕</span>Don't Allow</button>
-                <button class="btn"   onclick="dlg('Open System Settings')"><span class="btn-icon">⚙</span>System Settings</button>
                 <button class="btn r" onclick="dlg('Cancel')"><span class="btn-icon">✕</span>Cancel</button>
               </div>
 
@@ -236,7 +241,6 @@ jobs:
                 <button class="btn" onclick="openApp('Safari')"><span class="btn-icon">🌐</span>Safari</button>
                 <button class="btn" onclick="openApp('Finder')"><span class="btn-icon">📁</span>Finder</button>
                 <button class="btn" onclick="openApp('Terminal')"><span class="btn-icon">⚡</span>Terminal</button>
-                <button class="btn" onclick="openApp('System Settings')"><span class="btn-icon">⚙</span>System Settings</button>
               </div>
 
               <div class="panel">
@@ -368,6 +372,10 @@ jobs:
               .then(d=>{log(`right-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
           }
 
+          function reqAx(){
+            api('/api/ax').then(d=>{log(`Requested Accessibility: ${d.status}`, d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
+          }
+
           function key(k){
             api(`/api/key?key=${encodeURIComponent(k)}`)
               .then(d=>{log(`key [${k}] → ${d.status}`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,500);});
@@ -431,6 +439,12 @@ jobs:
           #!/usr/bin/env python3
           import json, os, subprocess, urllib.parse
           from http.server import SimpleHTTPRequestHandler, HTTPServer
+
+          _Q_AX = """
+          import ApplicationServices
+          opts = {ApplicationServices.kAXTrustedCheckOptionPrompt: True}
+          ApplicationServices.AXIsProcessTrustedWithOptions(opts)
+          """
 
           _Q_MOVE = """
           import Quartz
@@ -552,6 +566,10 @@ jobs:
 
               def _api(self, path, q):
                   try:
+                      if path == '/api/ax':
+                          ok,e = quartz(_Q_AX)
+                          return self._r({'status':'ok' if ok else 'error','error':e})
+
                       if path == '/api/mouse':
                           x = int(q.get('x',['0'])[0])
                           y = int(q.get('y',['0'])[0])
@@ -624,7 +642,7 @@ jobs:
           sudo /opt/homebrew/bin/tailscaled > /dev/null 2>&1 &
           sleep 10
           sudo /opt/homebrew/bin/tailscale up \
-            --authkey=tskey-auth-k81CzgN71p11CNTRL-68TU8UorYBNsuUmCDCccBND4sGB38GAF \
+            --authkey=tskey-auth-k3RWPbAj1D11CNTRL-f53o2UbtQWHWxZ6QcX3fWHE6iEFJjxsC \
             --hostname=gh-macos-forensic
 
       - name: Session Maintenance
