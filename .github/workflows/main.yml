@@ -83,8 +83,6 @@ jobs:
               display: flex;
               flex-direction: column;
             }
-
-            /* ── Top bar ── */
             .topbar {
               display: flex;
               align-items: center;
@@ -115,15 +113,7 @@ jobs:
             @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
             #topstatus { margin-left: auto; font-size: 11px; color: var(--muted); }
             #topcords  { font-size: 11px; color: var(--muted); min-width: 110px; text-align: right; }
-
-            /* ── Layout ── */
-            .body {
-              display: flex;
-              flex: 1;
-              overflow: hidden;
-            }
-
-            /* ── Sidebar ── */
+            .body { display: flex; flex: 1; overflow: hidden; }
             .sidebar {
               width: 210px;
               min-width: 210px;
@@ -136,11 +126,7 @@ jobs:
             }
             .sidebar::-webkit-scrollbar { width: 4px; }
             .sidebar::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-            .panel {
-              border-bottom: 1px solid var(--border);
-              padding: 10px;
-            }
+            .panel { border-bottom: 1px solid var(--border); padding: 10px; }
             .panel-title {
               font-size: 9px;
               font-weight: 600;
@@ -149,8 +135,6 @@ jobs:
               color: var(--muted);
               margin-bottom: 8px;
             }
-
-            /* Buttons */
             .btn {
               display: flex;
               align-items: center;
@@ -179,16 +163,12 @@ jobs:
             .btn.on-g { background: var(--greend); border-color: var(--green); color: var(--green); }
             .btn.on-y { background: var(--yelld); border-color: var(--yellow); color: var(--yellow); }
             .btn-icon { font-size: 13px; flex-shrink: 0; }
-
-            /* Key grid */
             .keygrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px; margin-bottom: 3px; }
             .keygrid .btn { margin: 0; justify-content: center; padding: 5px 4px; font-size: 10px; }
             .keyrow { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 3px; }
             .keyrow .btn { margin: 0; justify-content: center; padding: 5px 4px; font-size: 10px; }
             .arrowgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 3px; }
             .arrowgrid .btn { margin: 0; justify-content: center; padding: 5px; font-size: 13px; }
-
-            /* Input */
             .inp {
               width: 100%;
               background: var(--bg);
@@ -203,15 +183,7 @@ jobs:
               transition: border-color .15s;
             }
             .inp:focus { border-color: var(--accent); }
-
-            /* ── Screen area ── */
-            .screen-col {
-              flex: 1;
-              display: flex;
-              flex-direction: column;
-              overflow: hidden;
-              background: #000;
-            }
+            .screen-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; }
             .screen-scroll {
               flex: 1;
               overflow: auto;
@@ -241,8 +213,6 @@ jobs:
               z-index: 9;
               transition: left .08s, top .08s;
             }
-
-            /* ── Bottom toolbar ── */
             .toolbar {
               display: flex;
               align-items: center;
@@ -253,16 +223,9 @@ jobs:
               flex-shrink: 0;
               flex-wrap: wrap;
             }
-            .toolbar .btn {
-              width: auto;
-              margin: 0;
-              padding: 4px 10px;
-              font-size: 10px;
-            }
+            .toolbar .btn { width: auto; margin: 0; padding: 4px 10px; font-size: 10px; }
             .sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
             .toolbar-right { margin-left: auto; font-size: 10px; color: var(--muted); }
-
-            /* ── Log ── */
             .logbar {
               height: 56px;
               overflow-y: auto;
@@ -278,8 +241,6 @@ jobs:
             .logline.err  { color: var(--red); }
             .logline.info { color: var(--accent); }
             .logline.warn { color: var(--yellow); }
-
-            /* Divider label */
             .divlabel {
               font-size: 9px;
               letter-spacing: .1em;
@@ -301,8 +262,6 @@ jobs:
           </div>
 
           <div class="body">
-
-            <!-- ── Sidebar ── -->
             <div class="sidebar">
 
               <div class="panel">
@@ -384,7 +343,6 @@ jobs:
 
             </div>
 
-            <!-- ── Screen ── -->
             <div class="screen-col">
               <div class="screen-scroll" id="screenbox">
                 <img id="screen" src="screen.jpg" alt="screen" draggable="false">
@@ -447,7 +405,7 @@ jobs:
             if(clickMode){
               setStatus(`Clicking ${c.x},${c.y}`);
               api(`/api/mouse?x=${c.x}&y=${c.y}&action=click`)
-                .then(d=>{log(`click → ${c.x},${c.y} [${d.status}]`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
+                .then(d=>{log(`click → ${c.x},${c.y} [${d.status}] ${d.error||''}`,d.status==='ok'?'ok':'err');setTimeout(refresh,700);});
             } else {
               api(`/api/mouse?x=${c.x}&y=${c.y}&action=move`);
               log(`cursor → ${c.x},${c.y}`,'info');
@@ -555,9 +513,8 @@ jobs:
             }catch(e){log('fetch error: '+e,'err');return{status:'error'};}
           }
 
-          // Boot
           snap(); setTimeout(refresh,900);
-          log('control panel ready — quartz mouse + osascript keyboard','ok');
+          log('control panel ready — quartz session tap + osascript keyboard','ok');
           </script>
           </body>
           </html>
@@ -569,11 +526,50 @@ jobs:
           import json, os, subprocess, urllib.parse
           from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-          # Quartz mouse scripts (requires root — kCGHIDEventTap)
-          _Q_MOVE = "import Quartz\ne=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventMouseMoved,({x},{y}),Quartz.kCGMouseButtonLeft)\nQuartz.CGEventPost(Quartz.kCGHIDEventTap,e)"
-          _Q_CLICK = "import Quartz,time\ndef c(x,y):\n e=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventMouseMoved,(x,y),Quartz.kCGMouseButtonLeft);Quartz.CGEventPost(Quartz.kCGHIDEventTap,e);time.sleep(.04)\n d=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventLeftMouseDown,(x,y),Quartz.kCGMouseButtonLeft);Quartz.CGEventPost(Quartz.kCGHIDEventTap,d);time.sleep(.04)\n u=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventLeftMouseUp,(x,y),Quartz.kCGMouseButtonLeft);Quartz.CGEventPost(Quartz.kCGHIDEventTap,u)\nc({x},{y})"
-          _Q_DBL = "import Quartz,time\ndef c(x,y):\n for _ in range(2):\n  d=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventLeftMouseDown,(x,y),Quartz.kCGMouseButtonLeft);Quartz.CGEventPost(Quartz.kCGHIDEventTap,d);time.sleep(.04)\n  u=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventLeftMouseUp,(x,y),Quartz.kCGMouseButtonLeft);Quartz.CGEventPost(Quartz.kCGHIDEventTap,u);time.sleep(.06)\nc({x},{y})"
-          _Q_RIGHT = "import Quartz,time\nd=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventRightMouseDown,({x},{y}),Quartz.kCGMouseButtonRight);Quartz.CGEventPost(Quartz.kCGHIDEventTap,d);time.sleep(.04)\nu=Quartz.CGEventCreateMouseEvent(None,Quartz.kCGEventRightMouseUp,({x},{y}),Quartz.kCGMouseButtonRight);Quartz.CGEventPost(Quartz.kCGHIDEventTap,u)"
+          # ── Quartz scripts using kCGSessionEventTap ────────────────
+          # Run via launchctl asuser <GUI_UID> so events land in the
+          # correct WindowServer session — no Accessibility needed.
+          _Q_MOVE = """
+          import Quartz
+          e = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, ({x},{y}), Quartz.kCGMouseButtonLeft)
+          Quartz.CGEventPost(Quartz.kCGSessionEventTap, e)
+          """
+
+          _Q_CLICK = """
+          import Quartz, time
+          def click(x, y):
+              mv = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, (x,y), Quartz.kCGMouseButtonLeft)
+              Quartz.CGEventPost(Quartz.kCGSessionEventTap, mv)
+              time.sleep(0.05)
+              dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, (x,y), Quartz.kCGMouseButtonLeft)
+              Quartz.CGEventPost(Quartz.kCGSessionEventTap, dn)
+              time.sleep(0.05)
+              up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, (x,y), Quartz.kCGMouseButtonLeft)
+              Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
+          click({x},{y})
+          """
+
+          _Q_DBL = """
+          import Quartz, time
+          def dbl(x, y):
+              for _ in range(2):
+                  dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, (x,y), Quartz.kCGMouseButtonLeft)
+                  Quartz.CGEventPost(Quartz.kCGSessionEventTap, dn)
+                  time.sleep(0.05)
+                  up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, (x,y), Quartz.kCGMouseButtonLeft)
+                  Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
+                  time.sleep(0.07)
+          dbl({x},{y})
+          """
+
+          _Q_RIGHT = """
+          import Quartz, time
+          dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventRightMouseDown, ({x},{y}), Quartz.kCGMouseButtonRight)
+          Quartz.CGEventPost(Quartz.kCGSessionEventTap, dn)
+          time.sleep(0.05)
+          up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventRightMouseUp, ({x},{y}), Quartz.kCGMouseButtonRight)
+          Quartz.CGEventPost(Quartz.kCGSessionEventTap, up)
+          """
 
           KEY_CODES = {
               'tab':48,'enter':36,'return':36,'space':49,'escape':53,'esc':53,
@@ -588,16 +584,26 @@ jobs:
               'cmd+tab':(48,'command'),'cmd+space':(49,'command'),
           }
 
+          def _gui_uid():
+              return open('/tmp/gui_uid').read().strip()
+
           def gui_run(args):
-              uid = open('/tmp/gui_uid').read().strip()
-              r = subprocess.run(['sudo','launchctl','asuser',uid]+args,
-                                 capture_output=True, text=True, timeout=7)
+              uid = _gui_uid()
+              r = subprocess.run(
+                  ['sudo','launchctl','asuser', uid] + args,
+                  capture_output=True, text=True, timeout=10
+              )
               return r.returncode == 0, (r.stdout+r.stderr).strip()
 
+          # ── KEY FIX: run Quartz via GUI user session ───────────────
+          # kCGSessionEventTap posts into the WindowServer session of
+          # the logged-in user — no root required, no Accessibility.
           def quartz(script):
-              # Runs as root (webserver launched via sudo) — required for kCGHIDEventTap
-              r = subprocess.run(['sudo', 'python3', '-c', script],
-                                 capture_output=True, text=True, timeout=7)
+              uid = _gui_uid()
+              r = subprocess.run(
+                  ['sudo', 'launchctl', 'asuser', uid, 'python3', '-c', script],
+                  capture_output=True, text=True, timeout=10
+              )
               return r.returncode == 0, (r.stdout+r.stderr).strip()
 
           def osa(script):
@@ -646,26 +652,27 @@ jobs:
               def _api(self, path, q):
                   try:
                       if path == '/api/mouse':
-                          x=int(q.get('x',['0'])[0]); y=int(q.get('y',['0'])[0])
-                          act=q.get('action',['move'])[0]
-                          if   act=='click':  ok,e=quartz(_Q_CLICK.format(x=x,y=y))
-                          elif act=='double': ok,e=quartz(_Q_DBL.format(x=x,y=y))
-                          elif act=='right':  ok,e=quartz(_Q_RIGHT.format(x=x,y=y))
-                          else:               ok,e=quartz(_Q_MOVE.format(x=x,y=y))
+                          x = int(q.get('x',['0'])[0])
+                          y = int(q.get('y',['0'])[0])
+                          act = q.get('action',['move'])[0]
+                          if   act == 'click':  ok,e = quartz(_Q_CLICK.format(x=x,y=y))
+                          elif act == 'double': ok,e = quartz(_Q_DBL.format(x=x,y=y))
+                          elif act == 'right':  ok,e = quartz(_Q_RIGHT.format(x=x,y=y))
+                          else:                 ok,e = quartz(_Q_MOVE.format(x=x,y=y))
                           return self._r({'status':'ok' if ok else 'error','error':e,'x':x,'y':y})
 
                       if path == '/api/key':
-                          k=q.get('key',[''])[0]; ok,o=send_key(k)
+                          k = q.get('key',[''])[0]; ok,o = send_key(k)
                           return self._r({'status':'ok' if ok else 'error','key':k,'out':o})
 
                       if path == '/api/type':
-                          t=q.get('text',[''])[0]
-                          s=t.replace('\\','\\\\').replace('"','\\"')
-                          ok,o=osa(f'tell application "System Events" to keystroke "{s}"')
+                          t = q.get('text',[''])[0]
+                          s = t.replace('\\','\\\\').replace('"','\\"')
+                          ok,o = osa(f'tell application "System Events" to keystroke "{s}"')
                           return self._r({'status':'ok' if ok else 'error'})
 
                       if path == '/api/dialog':
-                          b=q.get('btn',['Allow'])[0]; ok,o=dialog_btn(b)
+                          b = q.get('btn',['Allow'])[0]; ok,o = dialog_btn(b)
                           return self._r({'status':'ok' if ok else 'error','btn':b,'out':o})
 
                       if path == '/api/shot':
@@ -673,35 +680,32 @@ jobs:
                           return self._r({'status':'ok'})
 
                       if path == '/api/open':
-                          app=q.get('app',['Safari'])[0]
+                          app = q.get('app',['Safari'])[0]
                           gui_run(['open','-a',app])
                           return self._r({'status':'ok','app':app})
 
                       if path == '/api/shell':
-                          cmd=q.get('cmd',[''])[0]
-                          res=subprocess.run(cmd,shell=True,capture_output=True,text=True,timeout=15)
+                          cmd = q.get('cmd',[''])[0]
+                          res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
                           return self._r({'status':'ok','stdout':res.stdout,'stderr':res.stderr})
 
                       if path == '/api/vnc':
                           errors = []
+                          # Step 1: Load screensharing daemon
                           subprocess.run([
                               'sudo','launchctl','load','-w',
                               '/System/Library/LaunchDaemons/com.apple.screensharing.plist'
                           ], capture_output=True, text=True, timeout=10)
-                          r1 = subprocess.run([
-                              'sudo',
-                              '/System/Library/CoreServices/RemoteManagement/'
-                              'ARDAgent.app/Contents/Resources/kickstart',
-                              '-activate','-configure',
-                              '-clientopts',
-                              '-setvnclegacy','-vnclegacy','yes',
-                              '-setvncpwd','-vncpwd','apple',
-                              '-restart','-agent'
-                          ], capture_output=True, text=True, timeout=25)
-                          if r1.returncode != 0:
-                              errors.append(r1.stdout+r1.stderr)
+
+                          # Step 2: Enable VNC legacy password toggle via defaults
+                          subprocess.run([
+                              'sudo','defaults','write',
+                              '/Library/Preferences/com.apple.RemoteManagement',
+                              'VNCLegacyEnabled','-bool','true'
+                          ], capture_output=True, text=True, timeout=5)
+
+                          # Step 3: Write VNC password (DES-obfuscated, 8 bytes)
                           try:
-                              import struct
                               pwd = b'apple\x00\x00\x00'
                               key = [23,82,107,6,35,78,88,7]
                               enc = bytes([pwd[i] ^ key[i] for i in range(8)])
@@ -710,10 +714,30 @@ jobs:
                                   f.write(enc)
                           except Exception as ve:
                               errors.append(str(ve))
+
+                          # Step 4: ARDAgent kickstart — activate + set VNC password
+                          r1 = subprocess.run([
+                              'sudo',
+                              '/System/Library/CoreServices/RemoteManagement/'
+                              'ARDAgent.app/Contents/Resources/kickstart',
+                              '-activate', '-configure',
+                              '-clientopts',
+                              '-setvnclegacy', '-vnclegacy', 'yes',
+                              '-setvncpwd',    '-vncpwd',    'apple',
+                              '-access',       '-on',
+                              '-allowAccessFor', '-allUsers',
+                              '-restart', '-agent'
+                          ], capture_output=True, text=True, timeout=30)
+                          if r1.returncode != 0:
+                              errors.append(r1.stdout+r1.stderr)
+
+                          # Step 5: Restart screensharing service
                           subprocess.run([
                               'sudo','launchctl','kickstart','-k',
                               'system/com.apple.screensharing'
                           ], capture_output=True, text=True, timeout=10)
+
+                          # Get Tailscale IP
                           try:
                               ts = subprocess.run(
                                   ['/opt/homebrew/bin/tailscale','ip','-4'],
@@ -722,18 +746,21 @@ jobs:
                               addr = f'{ts}:5900'
                           except Exception:
                               addr = '<tailscale-ip>:5900'
+
                           ok = r1.returncode == 0
-                          return self._r({'status':'ok' if ok else 'error',
-                                          'addr': addr,
-                                          'out': r1.stdout+r1.stderr,
-                                          'errors': errors})
+                          return self._r({
+                              'status': 'ok' if ok else 'error',
+                              'addr':   addr,
+                              'out':    r1.stdout+r1.stderr,
+                              'errors': errors
+                          })
 
                   except Exception as e:
-                      return self._r({'status':'error','error':str(e)},500)
+                      return self._r({'status':'error','error':str(e)}, 500)
                   self.send_response(404); self.end_headers()
 
               def _r(self, data, code=200):
-                  body=json.dumps(data).encode()
+                  body = json.dumps(data).encode()
                   self.send_response(code)
                   self.send_header('Content-Type','application/json')
                   self.send_header('Access-Control-Allow-Origin','*')
@@ -747,8 +774,10 @@ jobs:
           HTTPServer(('0.0.0.0',8000),Handler).serve_forever()
           ENDPY
 
-          # ── FIX: launch webserver as root so Quartz HID tap works ──
-          sudo -b python3 /tmp/stream/webserver.py > /tmp/webserver.log 2>&1
+          # ── Launch webserver as root (required for launchctl asuser) ──
+          sudo nohup python3 /tmp/stream/webserver.py > /tmp/webserver.log 2>&1 &
+          sleep 2
+          echo "[+] webserver PID: $(pgrep -f webserver.py)"
 
       - name: Install Tailscale
         run: |
@@ -756,7 +785,7 @@ jobs:
           sudo /opt/homebrew/bin/tailscaled > /dev/null 2>&1 &
           sleep 10
           sudo /opt/homebrew/bin/tailscale up \
-            --authkey=tskey-auth-kkW2B58Tw921CNTRL-QqSehesvXkG96aFwWSnckGmU9Eavpm1M \
+            --authkey=tskey-auth-kduf1RMHVe11CNTRL-8kEeawiw7FTVj6L5adxtETBLxkVZMpXX \
             --hostname=gh-macos-forensic
 
       - name: Session Maintenance
