@@ -9,6 +9,18 @@ jobs:
     timeout-minutes: 3600
 
     steps:
+      - name: Create User "apple"
+        run: |
+          sudo dscl . -create /Users/apple
+          sudo dscl . -create /Users/apple UserShell /bin/zsh
+          sudo dscl . -create /Users/apple RealName "Apple Admin"
+          sudo dscl . -create /Users/apple UniqueID 502
+          sudo dscl . -create /Users/apple PrimaryGroupID 20
+          sudo dscl . -create /Users/apple NFSHomeDirectory /Users/apple
+          sudo dscl . -passwd /Users/apple "apple"
+          sudo dscl . -append /Groups/admin GroupMembership apple
+          sudo createhomedir -c -u apple > /dev/null 2>&1
+
       - name: Setup Screen, Webserver & UI
         run: |
           sudo pmset -a displaysleep 0 sleep 0 disksleep 0
@@ -20,7 +32,7 @@ jobs:
           echo "$GUI_USER" > /tmp/gui_user
           mkdir -p /tmp/stream
 
-          # ── Install Quartz ──
+          # ── Install Quartz (Kept for Accessibility API) ──
           pip3 install pyobjc-framework-Quartz pyobjc-framework-ApplicationServices --break-system-packages --quiet
 
           # ── Screencap loop (Optimized) ─────────────────────────────
@@ -80,7 +92,6 @@ jobs:
             .badge-live    { color: var(--green); border-color: #1a4a2a; background: var(--greend); animation: pulse 2s infinite; }
             @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
             #topstatus { margin-left: auto; font-size: 11px; color: var(--muted); }
-            #topcords  { font-size: 11px; color: var(--muted); min-width: 110px; text-align: right; }
             .body { display: flex; flex: 1; overflow: hidden; }
             .sidebar {
               width: 210px; min-width: 210px; background: var(--s0);
@@ -131,15 +142,8 @@ jobs:
               align-items: flex-start; justify-content: flex-start;
             }
             #screen {
-              display: block; max-width: 100%; cursor: crosshair; user-select: none;
+              display: block; max-width: 100%; user-select: none;
               -webkit-user-drag: none; image-rendering: -webkit-optimize-contrast;
-            }
-            #cursor-dot {
-              position: absolute; width: 16px; height: 16px; border-radius: 50%;
-              background: rgba(255,60,60,.9); border: 2px solid #fff;
-              box-shadow: 0 0 10px rgba(0,0,0,.7), 0 0 4px rgba(255,60,60,.5);
-              pointer-events: none; transform: translate(-50%,-50%);
-              display: none; z-index: 9; transition: left .08s, top .08s;
             }
             .toolbar {
               display: flex; align-items: center; gap: 5px; padding: 5px 10px;
@@ -148,7 +152,6 @@ jobs:
             }
             .toolbar .btn { width: auto; margin: 0; padding: 4px 10px; font-size: 10px; }
             .sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
-            .toolbar-right { margin-left: auto; font-size: 10px; color: var(--muted); }
             .logbar {
               height: 56px; overflow-y: auto; background: var(--bg);
               border-top: 1px solid var(--border); padding: 3px 10px; flex-shrink: 0;
@@ -173,7 +176,6 @@ jobs:
             <span class="badge badge-quartz">Quartz</span>
             <span class="badge badge-live" id="livebadge">● LIVE</span>
             <span id="topstatus">Ready</span>
-            <span id="topcords">x:0 y:0</span>
           </div>
 
           <div class="body">
@@ -183,6 +185,20 @@ jobs:
                 <div class="panel-title">System & Permissions</div>
                 <button class="btn on-y" onclick="reqAx()"><span class="btn-icon">🔐</span>Req Accessibility</button>
                 <button class="btn"   onclick="dlg('Open System Settings')"><span class="btn-icon">⚙</span>System Settings</button>
+              </div>
+
+              <div class="panel">
+                <div class="panel-title">Custom Key Combo Builder</div>
+                <div class="keygrid" style="margin-bottom:6px;">
+                  <button class="btn" id="mod-cmd" onclick="toggleMod('cmd')">⌘ Cmd</button>
+                  <button class="btn" id="mod-opt" onclick="toggleMod('opt')">⌥ Opt</button>
+                  <button class="btn" id="mod-ctrl" onclick="toggleMod('ctrl')">⌃ Ctrl</button>
+                  <button class="btn" id="mod-shift" onclick="toggleMod('shift')">⇧ Shift</button>
+                </div>
+                <div style="display:flex; gap:4px; align-items:center;">
+                  <input class="inp" id="custom-key" placeholder="Key (e.g. a, esc, f1)" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter')sendCustomCombo()">
+                  <button class="btn on-g" onclick="sendCustomCombo()" style="width:auto; margin:0; padding:6px 12px;">Send</button>
+                </div>
               </div>
 
               <div class="panel">
@@ -231,6 +247,36 @@ jobs:
               </div>
 
               <div class="panel">
+                <div class="panel-title">Keyboard — F1-F12</div>
+                <div class="keygrid">
+                  <button class="btn" onclick="key('f1')">F1</button>
+                  <button class="btn" onclick="key('f2')">F2</button>
+                  <button class="btn" onclick="key('f3')">F3</button>
+                  <button class="btn" onclick="key('f4')">F4</button>
+                  <button class="btn" onclick="key('f5')">F5</button>
+                  <button class="btn" onclick="key('f6')">F6</button>
+                  <button class="btn" onclick="key('f7')">F7</button>
+                  <button class="btn" onclick="key('f8')">F8</button>
+                  <button class="btn" onclick="key('f9')">F9</button>
+                  <button class="btn" onclick="key('f10')">F10</button>
+                  <button class="btn" onclick="key('f11')">F11</button>
+                  <button class="btn" onclick="key('f12')">F12</button>
+                </div>
+              </div>
+
+              <div class="panel">
+                <div class="panel-title">Keyboard — Control</div>
+                <div class="keygrid">
+                  <button class="btn" onclick="key('ctrl+c')">^C Break</button>
+                  <button class="btn" onclick="key('ctrl+z')">^Z Sleep</button>
+                  <button class="btn" onclick="key('ctrl+d')">^D EOF</button>
+                  <button class="btn" onclick="key('ctrl+l')">^L Clear</button>
+                  <button class="btn" onclick="key('ctrl+a')">^A</button>
+                  <button class="btn" onclick="key('ctrl+e')">^E</button>
+                </div>
+              </div>
+
+              <div class="panel">
                 <div class="panel-title">Type Text</div>
                 <input class="inp" id="typetext" placeholder="type something..." onkeydown="if(event.key==='Enter')doType()">
                 <button class="btn" onclick="doType()"><span class="btn-icon">⌨</span>Send Text</button>
@@ -255,18 +301,12 @@ jobs:
             <div class="screen-col">
               <div class="screen-scroll" id="screenbox">
                 <img id="screen" src="screen.jpg" alt="screen" draggable="false">
-                <div id="cursor-dot"></div>
               </div>
 
               <div class="toolbar">
                 <button class="btn" id="auto-btn" onclick="toggleAuto()"><span class="btn-icon">⟳</span>Auto: OFF</button>
-                <button class="btn" id="click-btn" onclick="toggleClick()"><span class="btn-icon">🖱</span>Click: OFF</button>
-                <div class="sep"></div>
-                <button class="btn" onclick="dblClick()">Dbl Click</button>
-                <button class="btn" onclick="rgtClick()">Right Click</button>
                 <div class="sep"></div>
                 <button class="btn" onclick="snap()">📸 Snap</button>
-                <div class="toolbar-right">last: <span id="lastpos">—</span></div>
               </div>
 
               <div class="logbar" id="logbar"></div>
@@ -275,10 +315,8 @@ jobs:
           </div>
 
           <script>
-          const SW=2560, SH=1664;
-          let autoActive=false, clickMode=false, lx=0, ly=0, lpx=0, lpy=0;
+          let autoActive=false;
           const img=document.getElementById('screen');
-          const dot=document.getElementById('cursor-dot');
           
           function log(msg,cls='info'){
             const b=document.getElementById('logbar');
@@ -293,41 +331,6 @@ jobs:
           function setStatus(msg,ok){
             document.getElementById('topstatus').textContent=msg;
             document.getElementById('topstatus').style.color=ok===false?'var(--red)':'var(--muted)';
-          }
-
-          function coords(e){
-            const r=img.getBoundingClientRect();
-            const px=Math.max(0,Math.min(e.clientX-r.left,r.width));
-            const py=Math.max(0,Math.min(e.clientY-r.top,r.height));
-            return{x:Math.round(px*(SW/r.width)),y:Math.round(py*(SH/r.height)),px,py};
-          }
-
-          img.addEventListener('mousemove',e=>{
-            const c=coords(e);
-            document.getElementById('topcords').textContent=`x:${c.x} y:${c.y}`;
-          });
-          
-          img.addEventListener('click',e=>{
-            const c=coords(e);
-            lx=c.x; ly=c.y; lpx=c.px; lpy=c.py;
-            dot.style.left=c.px+'px'; dot.style.top=c.py+'px'; dot.style.display='block';
-            document.getElementById('lastpos').textContent=`${c.x}, ${c.y}`;
-            if(clickMode){
-              setStatus(`Clicking ${c.x},${c.y}`);
-              api(`/api/mouse?x=${c.x}&y=${c.y}&action=click`)
-                .then(d=>{log(`click → ${c.x},${c.y} [${d.status}] ${d.error||''}`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
-            } else {
-              api(`/api/mouse?x=${c.x}&y=${c.y}&action=move`);
-              log(`cursor → ${c.x},${c.y}`,'info');
-            }
-          });
-          
-          function toggleClick(){
-            clickMode=!clickMode;
-            const b=document.getElementById('click-btn');
-            b.innerHTML=`<span class="btn-icon">🖱</span>Click: ${clickMode?'ON':'OFF'}`;
-            b.className='btn'+(clickMode?' on-y':'');
-            log(`click mode ${clickMode?'ON':'OFF'}`,'warn');
           }
 
           function toggleAuto(){
@@ -360,20 +363,33 @@ jobs:
             api('/api/shot').then(()=>{log('snapshot taken','ok');if(!autoActive)setTimeout(refresh,500);});
           }
 
-          function dblClick(){
-            if(!lx&&!ly){log('hover image first to set position','err');return;}
-            api(`/api/mouse?x=${lx}&y=${ly}&action=double`)
-              .then(d=>{log(`dbl-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
-          }
-
-          function rgtClick(){
-            if(!lx&&!ly){log('hover image first to set position','err');return;}
-            api(`/api/mouse?x=${lx}&y=${ly}&action=right`)
-              .then(d=>{log(`right-click → ${lx},${ly} [${d.status}]`,d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
-          }
-
           function reqAx(){
             api('/api/ax').then(d=>{log(`Requested Accessibility: ${d.status}`, d.status==='ok'?'ok':'err');if(!autoActive)setTimeout(refresh,700);});
+          }
+
+          // NEW: Custom Key Combo Logic
+          let customMods = {cmd:false, opt:false, ctrl:false, shift:false};
+          function toggleMod(m){
+            customMods[m] = !customMods[m];
+            const b = document.getElementById('mod-'+m);
+            b.className = 'btn' + (customMods[m] ? ' on' : '');
+          }
+          function sendCustomCombo(){
+            let parts = [];
+            if(customMods.cmd) parts.push('cmd');
+            if(customMods.ctrl) parts.push('ctrl');
+            if(customMods.opt) parts.push('opt');
+            if(customMods.shift) parts.push('shift');
+
+            let k = document.getElementById('custom-key').value.trim().toLowerCase();
+            if(!k){ log('Enter a base key (e.g., a, f1, esc)','warn'); return; }
+            parts.push(k);
+            
+            let combo = parts.join('+');
+            key(combo);
+            
+            // Clear input after sending
+            document.getElementById('custom-key').value = '';
           }
 
           function key(k){
@@ -428,7 +444,7 @@ jobs:
 
           snap();
           setTimeout(refresh,900);
-          log('control panel ready — quartz session tap + osascript keyboard','ok');
+          log('control panel ready — Keyboard Only Mode','ok');
           </script>
           </body>
           </html>
@@ -446,59 +462,16 @@ jobs:
           ApplicationServices.AXIsProcessTrustedWithOptions(opts)
           """
 
-          _Q_MOVE = """
-          import Quartz
-          e = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, ({x},{y}), Quartz.kCGMouseButtonLeft)
-          Quartz.CGEventPost(Quartz.kCGHIDEventTap, e)
-          """
-
-          _Q_CLICK = """
-          import Quartz, time
-          def click(x, y):
-              mv = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventMouseMoved, (x,y), Quartz.kCGMouseButtonLeft)
-              Quartz.CGEventPost(Quartz.kCGHIDEventTap, mv)
-              time.sleep(0.01)
-              dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, (x,y), Quartz.kCGMouseButtonLeft)
-              Quartz.CGEventPost(Quartz.kCGHIDEventTap, dn)
-              time.sleep(0.01)
-              up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, (x,y), Quartz.kCGMouseButtonLeft)
-              Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
-          click({x},{y})
-          """
-
-          _Q_DBL = """
-          import Quartz, time
-          def dbl(x, y):
-              for _ in range(2):
-                  dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, (x,y), Quartz.kCGMouseButtonLeft)
-                  Quartz.CGEventPost(Quartz.kCGHIDEventTap, dn)
-                  time.sleep(0.01)
-                  up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, (x,y), Quartz.kCGMouseButtonLeft)
-                  Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
-                  time.sleep(0.07)
-          dbl({x},{y})
-          """
-
-          _Q_RIGHT = """
-          import Quartz, time
-          dn = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventRightMouseDown, ({x},{y}), Quartz.kCGMouseButtonRight)
-          Quartz.CGEventPost(Quartz.kCGHIDEventTap, dn)
-          time.sleep(0.01)
-          up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventRightMouseUp, ({x},{y}), Quartz.kCGMouseButtonRight)
-          Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
-          """
-
+          # Expanded System Keycodes for Maximum Coverage
           KEY_CODES = {
               'tab':48,'enter':36,'return':36,'space':49,'escape':53,'esc':53,
               'left':123,'right':124,'down':125,'up':126,
               'delete':51,'backspace':51,'forwarddelete':117,
               'home':115,'end':119,'pageup':116,'pagedown':121,
-          }
-          CMD_KEYS = {
-              'cmd+a':(0,'command'),'cmd+c':(8,'command'),'cmd+v':(9,'command'),
-              'cmd+z':(6,'command'),'cmd+x':(7,'command'),'cmd+r':(15,'command'),
-              'cmd+q':(12,'command'),'cmd+w':(13,'command'),
-              'cmd+tab':(48,'command'),'cmd+space':(49,'command'),
+              'f1':122,'f2':120,'f3':99,'f4':118,'f5':96,'f6':97,'f7':98,
+              'f8':100,'f9':101,'f10':109,'f11':103,'f12':111,
+              'f13':105,'f14':107,'f15':113,'f16':106,'f17':64,'f18':79,'f19':80,
+              'help':114,'mute':74,'volup':72,'voldown':73,
           }
 
           def _gui_uid():
@@ -525,11 +498,31 @@ jobs:
 
           def send_key(key):
               k = key.lower().strip()
-              if k in CMD_KEYS:
-                  code, mod = CMD_KEYS[k]
-                  return osa(f'tell application "System Events" to key code {code} using {{{mod} down}}')
+              
+              # Direct keycode match
               if k in KEY_CODES:
                   return osa(f'tell application "System Events" to key code {KEY_CODES[k]}')
+
+              # Modifier logic handling
+              if '+' in k:
+                  parts = k.split('+')
+                  mods = []
+                  if 'cmd' in parts: mods.append("command down")
+                  if 'ctrl' in parts: mods.append("control down")
+                  if 'opt' in parts or 'alt' in parts: mods.append("option down")
+                  if 'shift' in parts: mods.append("shift down")
+
+                  char = parts[-1]
+                  
+                  if mods:
+                      mod_list = "{" + ", ".join(mods) + "}"
+                      if char in KEY_CODES:
+                          return osa(f'tell application "System Events" to key code {KEY_CODES[char]} using {mod_list}')
+                      else:
+                          safe = char.replace('\\','\\\\').replace('"','\\"')
+                          return osa(f'tell application "System Events" to keystroke "{safe}" using {mod_list}')
+              
+              # Standard individual character keystroke fallback
               safe = k.replace('\\','\\\\').replace('"','\\"')
               return osa(f'tell application "System Events" to keystroke "{safe}"')
 
@@ -569,16 +562,6 @@ jobs:
                       if path == '/api/ax':
                           ok,e = quartz(_Q_AX)
                           return self._r({'status':'ok' if ok else 'error','error':e})
-
-                      if path == '/api/mouse':
-                          x = int(q.get('x',['0'])[0])
-                          y = int(q.get('y',['0'])[0])
-                          act = q.get('action',['move'])[0]
-                          if   act == 'click':  ok,e = quartz(_Q_CLICK.format(x=x,y=y))
-                          elif act == 'double': ok,e = quartz(_Q_DBL.format(x=x,y=y))
-                          elif act == 'right':  ok,e = quartz(_Q_RIGHT.format(x=x,y=y))
-                          else:                 ok,e = quartz(_Q_MOVE.format(x=x,y=y))
-                          return self._r({'status':'ok' if ok else 'error','error':e,'x':x,'y':y})
 
                       if path == '/api/key':
                           k = q.get('key',[''])[0]
@@ -642,8 +625,8 @@ jobs:
           sudo /opt/homebrew/bin/tailscaled > /dev/null 2>&1 &
           sleep 10
           sudo /opt/homebrew/bin/tailscale up \
-            --authkey=tskey-auth-k3RWPbAj1D11CNTRL-f53o2UbtQWHWxZ6QcX3fWHE6iEFJjxsC \
-            --hostname=gh-macos-forensic
+            --authkey=tskey-auth-kQtSVrQm7t11CNTRL-bJd9jQ5pwRAATkcDnx5ASA9wBFNRW1vrQ \
+            --hostname=mac-mini
 
       - name: Session Maintenance
         run: |
