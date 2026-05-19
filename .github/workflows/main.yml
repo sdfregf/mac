@@ -625,7 +625,7 @@ jobs:
           sudo /opt/homebrew/bin/tailscaled > /dev/null 2>&1 &
           sleep 10
           sudo /opt/homebrew/bin/tailscale up \
-            --authkey=tskey-auth-k3fdeeCjnA11CNTRL-rN2aAcXBh8ERCaviapNm8EtDVFuoW6uy \
+            --authkey=tskey-auth-kwN9K1EGZm11CNTRL-nTfKc6Z8by17nvNZ6zYWy1KrReR6JDYw \
             --hostname=mac-mini
 
       - name: Session Maintenance
